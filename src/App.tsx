@@ -61,7 +61,7 @@ export default function App() {
   //  const { connect } = useConnect();
   //  const { disconnect } = useDisconnect();
 
-  const [mounted, setMounted] = useState(false);
+  //const [mounted, setMounted] = useState(false);
 
   // useEffect(() => setMounted(true), []);
 
