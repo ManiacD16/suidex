@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useWeb3ModalAccount, useWeb3Modal } from "@web3modal/ethers5/react";
+import { useState, useEffect } from "react";
+//import { useWeb3ModalAccount, useWeb3Modal } from "@web3modal/ethers5/react";
 import BackgroundEffects from './components/BackgroundEffects';
+import { ConnectButton } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+//import { useWallet } from '@mysten/dapp-kit';
+import '@mysten/dapp-kit/dist/index.css';
 // import {
 //   useAccount,
 //   useConnect,
@@ -52,25 +56,51 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("exchange");
   const [amount1, setAmount1] = useState<string>("0.0");
   const [amount2, setAmount2] = useState<string>("0.0");
-
-  const { open } = useWeb3Modal();
-  const { address }: { address: string | undefined } = useWeb3ModalAccount();
+  const currentAccount = useCurrentAccount();
+  // const { open } = useWeb3Modal();
+  // const { address }: { address: string | undefined } = useWeb3ModalAccount();
+  //const suiClient = useSuiClient();
   const [liquidityAmount1, setLiquidityAmount1] = useState("0.0");
   const [liquidityAmount2, setLiquidityAmount2] = useState("0.0");
+ // const [isConnected, setIsConnected] = useState(false);
   // const { address, isConnected } = useAccount();
   //  const { connect } = useConnect();
   //  const { disconnect } = useDisconnect();
 
+  const getShortAddress = (address: string | undefined) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
   //const [mounted, setMounted] = useState(false);
+  // Add effect to handle wallet connection
+ // Add effect to handle wallet connection
+ // Enhanced wallet connection monitoring
+ useEffect(() => {
+  if (!window.suiWallet) {
+    console.warn("Sui Wallet is not installed.");
+  } else {
+    console.log("Sui Wallet is available.");
+    window.suiWallet.getAccounts().then((accounts) => {
+      console.log("Accounts available:", accounts);
+    }).catch((error) => {
+      console.error("Error fetching accounts:", error);
+    });
+  }
+}, []);
+
 
   // useEffect(() => setMounted(true), []);
+
+   // Custom connect button component
+ 
 
   return (
     <>
      <BackgroundEffects />
       <div className="min-h-screen text-white ">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 border-b border-[#2a4b8a] space-y-2 sm:space-y-0">
+        <header className="flex  px-2 items-center justify-between p-3 sm:p-4 border-b border-[#2a4b8a]">
           <div className="flex items-center space-x-4 sm:space-x-8 w-full sm:w-auto justify-between sm:justify-start">
             <div className="flex items-center">
               <span className="text-xl sm:text-2xl font-bold">SuiDe</span>
@@ -100,7 +130,7 @@ export default function App() {
               </button>
             </nav> */}
           </div>
-          <div className="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto justify-center sm:justify-end">
+          <div className="flex items-center space-x-2  w-full sm:w-auto justify-end" >
             <div className="flex items-center space-x-2 text-xs sm:text-sm">
               <span className="text-green-500">$0.0000329</span>
             </div>
@@ -144,17 +174,152 @@ export default function App() {
             {/* Connect Wallet Button */}
             {/* Connect Wallet Button */}
            {/* Connect Wallet Button */}
-<div className="flex justify-center">
-  <button
-    onClick={() => open()}
-    className="bg-cyan-900 hover:bg-[#2a2a2a] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-700 font-medium flex items-center justify-center space-x-2 transition-all duration-200 text-sm sm:text-base"
-  >
-    {address 
-      ? `${address.slice(0, 6)}...${address.slice(-4)}`
-      : "Connect Wallet"
-    }
-  </button>
-</div>
+              {/* Enhanced Connect Button with custom styling */}
+              <div className="relative">
+              <style>
+        {`
+          /* Base modal styles */
+/* Base modal styles */
+/* Base modal styles */
+
+/* Clean up modal header */
+div[role="dialog"] h1 {
+  font-size: 1rem !important;
+  padding: 0.75rem 1rem !important;
+  margin: 0 !important;
+  border-bottom: 1px solid #eee;
+  text-align: center !important;
+}
+
+/* Style wallet options */
+div[role="dialog"] button {
+  width: 100% !important;
+  padding: 0.625rem !important;
+  margin: 0.25rem 0 !important;
+  border-radius: 0.5rem !important;
+  transition: background 0.2s !important;
+  background-color: #dce8e1 !important; /* Green background */
+  color: white !important;
+}
+
+/* Button hover state */
+div[role="dialog"] button:hover {
+  background-color: #16a34a !important; /* Darker green on hover */
+}
+
+/* Close Button */
+div[role="dialog"] button[aria-label="Close"] {
+  position: absolute !important;
+  top: 0.75rem !important;
+  right: 0.75rem !important;
+  width: auto !important;
+  padding: 0.375rem !important;
+  background-color: transparent !important;
+  color: #666 !important;
+}
+
+/* Clean up the modal content area */
+div[role="dialog"] > div {
+  padding: 0.75rem !important;
+  max-height: 80vh !important;
+  overflow-y: auto !important;
+}
+
+/* "What is a Wallet?" text styling */
+div[role="dialog"] button:last-child,
+div[role="dialog"] .what-is-wallet-btn {
+  color: black !important;
+  background-color: #f0f0f0 !important;
+}
+
+/* Mobile-first responsive button styles */
+.sui-connect-button {
+  font-size: 0.875rem !important;
+  padding: 0.5rem 0.75rem !important;
+  min-width: auto !important;
+  white-space: nowrap !important;
+  background-color: #dce8e1 !important;
+  color: white !important;
+  border-radius: 0.5rem !important;
+}
+
+/* Connected state styles */
+.sui-connect-button div {
+  background-color: #dce8e1 !important;
+  color: white !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 0.5rem !important;
+}
+
+/* Center dropdown positioning */
+div[role="dialog"] {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .sui-connect-button {
+    font-size: 0.75rem !important;
+    padding: 0.375rem 0.5rem !important;
+  }
+  
+  .sui-connect-button span {
+    max-width: 80px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  /* Ensure dropdown stays centered on mobile */
+  div[role="dialog"] {
+    width: 90% !important;
+    max-width: 400px !important;
+  }
+  
+  /* Specific mobile styling for "What is a Wallet?" text */
+  div[role="dialog"] button:last-child,
+  div[role="dialog"] .what-is-wallet-btn {
+    color: black !important;
+    background-color: #f0f0f0 !important;
+    font-weight: normal !important;
+  }
+}
+
+/* Only target the main connect button */
+.sui-connect-button {
+  background-color: #dce8e1 !important;
+  color: green !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 0.5rem !important;
+}
+
+.sui-connect-button:hover {
+  background-color: #16a34a !important;
+}
+        `}
+      </style>
+      <ConnectButton 
+  className=" !text-black hover:!bg-[#16a34a] rounded-lg transition-colors duration-200"
+  style={{
+    backgroundColor: "#22c55e !important",
+    color: "white !important",
+    padding: "0.5rem 1rem",
+    borderRadius: "0.5rem"
+  }}
+  connectText="Connect Wallet"
+>
+  {currentAccount ? (
+    <div className="flex items-center space-x-1">
+      <span>{getShortAddress(currentAccount.address)}</span>
+    </div>
+  ) : (
+    "Connect"
+  )}
+</ConnectButton>
+            </div>
+
           </div>
 
          
@@ -221,13 +386,13 @@ export default function App() {
                     amount={amount1}
                     setAmount={setAmount1}
                     token="PLS"
-                    tokenImage="/placeholder.svg"
+                    tokenImage="/pic1.png"
                   />
                   <TokenSelector
                     amount={amount2}
                     setAmount={setAmount2}
                     token="PLSX"
-                    tokenImage="/placeholder.svg"
+                    tokenImage="/pic2.png"
                   />
                 </div>
               </div>

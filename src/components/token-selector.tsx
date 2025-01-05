@@ -11,12 +11,12 @@ interface TokenSelectorProps {
 const tokenList = {
   PLS: {
     name: "PulseChain",
-    image: "/pulse-logo.png",
+    image: "/pic1.png",
     symbol: "PLS"
   },
   PLSX: {
     name: "PulseX",
-    image: "/pulsex-logo.png",
+    image: "/pic2.png",
     symbol: "PLSX"
   },
   // Add more tokens as needed
