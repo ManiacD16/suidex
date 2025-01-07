@@ -29,7 +29,8 @@
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.5.1",
     "react-router-dom": "^6.27.0",
-    "react-use": "^17.6.0"
+    "react-use": "^17.6.0",
+    "save-dev": "^0.0.1-security"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

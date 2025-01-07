@@ -16,7 +16,10 @@ import { CONSTANTS } from "../constants/addresses";
 export default function MainCon() {
   const [activeTab, setActiveTab] = useState<string>("exchange");
   const [amount1, setAmount1] = useState<string>("");
-  const [amount2, setAmount2] = useState<string>("0.0");
+  // const [amount2, setAmount2] = useState<string>("0.0");
+  const [priceRate0, setPriceRate0] = useState<string | null>(null);
+  const [priceRate1, setPriceRate1] = useState<string | null>(null);
+  const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
 
   const [token0, setToken0] = useState("");
   const [token1, setToken1] = useState("");
@@ -33,8 +36,8 @@ export default function MainCon() {
     timestamp: 0,
   });
 
-  const [liquidityAmount1, setLiquidityAmount1] = useState("0.0");
-  const [liquidityAmount2, setLiquidityAmount2] = useState("0.0");
+  // const [liquidityAmount1, setLiquidityAmount1] = useState("0.0");
+  // const [liquidityAmount2, setLiquidityAmount2] = useState("0.0");
 
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
@@ -55,6 +58,42 @@ export default function MainCon() {
         });
     }
   }, []);
+  useEffect(() => {
+    const calculateRates = () => {
+      if (reserves.reserve0 === "0" || reserves.reserve1 === "0") {
+        setPriceRate0(null);
+        setPriceRate1(null);
+        return;
+      }
+
+      // Calculate price rates (1 token0 = X token1 and vice versa)
+      const rate0 = (
+        Number(reserves.reserve1) / Number(reserves.reserve0)
+      ).toFixed(6);
+      const rate1 = (
+        Number(reserves.reserve0) / Number(reserves.reserve1)
+      ).toFixed(6);
+
+      setPriceRate0(rate0);
+      setPriceRate1(rate1);
+    };
+
+    calculateRates();
+  }, [reserves]);
+
+  useEffect(() => {
+    const suggestAmount = () => {
+      if (amount0 && priceRate0 && reserves.reserve0 !== "0") {
+        const suggested = (Number(amount0) * Number(priceRate0)).toFixed(6);
+        console.log("Suggested amount:", suggested);
+        setSuggestedAmount1(suggested);
+      } else {
+        setSuggestedAmount1(null);
+      }
+    };
+
+    suggestAmount();
+  }, [amount0, priceRate0]);
 
   useEffect(() => {
     const fetchBalance = async (
@@ -379,7 +418,7 @@ export default function MainCon() {
             });
 
             if (existingPair) {
-              pairId = existingPair.parsedJson.pair;
+              pairId = (existingPair.parsedJson as { pair: string }).pair;
               console.log("Found existing pair after error:", pairId);
             } else {
               throw new Error("Failed to find pair after creation attempt");
@@ -527,8 +566,6 @@ export default function MainCon() {
 
   return (
     <>
-      {/* Header */}
-
       {/* Main Content */}
       <main className="max-w-[480px] mx-auto pt-8 px-4">
         <div className="mb-4 sm:mb-6 border-b border-gray-800">
@@ -585,8 +622,29 @@ export default function MainCon() {
               </div>
 
               <div className="space-y-2">
-                <TokenSelector label="Token 0" onSelect={setToken0} />
-                <TokenSelector label="Token 0" onSelect={setToken0} />
+                {/* <TokenSelector label="Token 0" onSelect={setToken0} /> */}
+                <TokenSelector
+                  label="Token 0"
+                  onSelect={setToken0}
+                  amount={amount0}
+                  onAmountChange={(value) => {
+                    setAmount0(value);
+                    if (value && priceRate0) {
+                      const suggested = (
+                        Number(value) * Number(priceRate0)
+                      ).toFixed(6);
+                      setAmount1(suggested);
+                    }
+                  }}
+                />
+                {/* <TokenSelector label="Token 1" onSelect={setToken1} /> */}
+                <TokenSelector
+                  label="Token 1"
+                  onSelect={setToken1}
+                  amount={amount1}
+                  onAmountChange={setAmount1}
+                  readOnly={true}
+                />
               </div>
             </div>
           </div>
@@ -603,14 +661,24 @@ export default function MainCon() {
                       pairExists ? "bg-green-100" : "bg-yellow-100"
                     }`}
                   >
-                    <p className="text-sm">
+                    <p className="text-sm text-black">
                       {pairExists ? (
                         <>
                           <div>{`✅ Trading pair exists (ID: ${currentPairId?.slice(
                             0,
                             8
                           )}...)`}</div>
-                          <div>{`Reserves :  ${reserves.reserve0} - ${reserves.reserve1}`}</div>
+                          <div>{`Reserves: ${(
+                            Number(reserves.reserve0) / 1e9
+                          ).toFixed(6)} - ${(
+                            Number(reserves.reserve1) / 1e9
+                          ).toFixed(6)}`}</div>
+                          {priceRate0 && priceRate1 && (
+                            <div className="mt-2 text-gray-600">
+                              <div>{`1 Token0 = ${priceRate0} Token1`}</div>
+                              <div>{`1 Token1 = ${priceRate1} Token0`}</div>
+                            </div>
+                          )}
                         </>
                       ) : (
                         "⚠️ Trading pair needs to be created"
@@ -627,10 +695,23 @@ export default function MainCon() {
                       First Token
                     </label>
                     <span className="text-xs sm:text-sm text-gray-400">
-                      Balance: {parseFloat(balance0) / 1e9}
+                      Balance: {(parseFloat(balance0) / 1e9).toFixed(6)}
                     </span>
                   </div>
-                  <TokenSelector label="Token 0" onSelect={setToken0} />
+                  <TokenSelector
+                    label="Token 0"
+                    onSelect={setToken0}
+                    amount={amount0}
+                    onAmountChange={(value) => {
+                      setAmount0(value);
+                      if (value && priceRate0) {
+                        const suggested = (
+                          Number(value) * Number(priceRate0)
+                        ).toFixed(6);
+                        setAmount1(suggested);
+                      }
+                    }}
+                  />
                   <div className="flex-1 min-w-0"></div>
                 </div>
 
@@ -640,10 +721,23 @@ export default function MainCon() {
                       Second Token
                     </label>
                     <span className="text-xs sm:text-sm text-gray-400">
-                      Balance: {parseFloat(balance1) / 1e9}
+                      Balance: {(parseFloat(balance1) / 1e9).toFixed(6)}
                     </span>
+                    {/* <span className="text-xs sm:text-sm text-gray-200">
+                      {suggestedAmount1 && pairExists && (
+                        <span className="text-green-600">
+                          {` Suggested : ${suggestedAmount1}`}
+                        </span>
+                      )}
+                    </span> */}
                   </div>
-                  <TokenSelector label="Token 1" onSelect={setToken1} />
+                  <TokenSelector
+                    label="Token 1"
+                    onSelect={setToken1}
+                    amount={amount1}
+                    onAmountChange={setAmount1}
+                    readOnly={true}
+                  />
                 </div>
 
                 <button
