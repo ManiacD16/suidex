@@ -171,7 +171,7 @@ export default function TokenSelector({
       <div className="flex justify-between items-center gap-2 sm:gap-3">
         <div className="flex-1 min-w-0 relative">
           <input
-            type="number"
+            type="text"
             value={amount}
             onChange={(e) => {
               const value = e.target.value;

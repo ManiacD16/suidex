@@ -72,8 +72,16 @@ export default function MainCon() {
           id: tokenId,
           options: { showContent: true },
         });
-        if (coin.data?.content?.fields?.balance) {
-          setBalance(coin.data.content.fields.balance);
+
+        // Add type guards to check the structure of the response
+        if (
+          coin.data?.content &&
+          "fields" in coin.data.content &&
+          typeof coin.data.content.fields === "object" &&
+          coin.data.content.fields &&
+          "balance" in coin.data.content.fields
+        ) {
+          setBalance(coin.data.content.fields.balance as string);
         }
       } catch (error) {
         console.error("Error fetching balance:", error);
@@ -126,10 +134,8 @@ export default function MainCon() {
   useEffect(() => {
     const checkPairExistence = async () => {
       if (!token0 || !token1) return;
-
       try {
         console.log("Checking pair existence for tokens:", { token0, token1 });
-
         const [token0Obj, token1Obj] = await Promise.all([
           suiClient.getObject({ id: token0, options: { showType: true } }),
           suiClient.getObject({ id: token1, options: { showType: true } }),
@@ -161,10 +167,8 @@ export default function MainCon() {
 
         if (response?.results?.[0]?.returnValues) {
           const optionValue = response.results[0].returnValues[0];
-
           if (Array.isArray(optionValue) && optionValue.length > 0) {
             const addressBytes = optionValue[0];
-
             if (Array.isArray(addressBytes) && addressBytes.length > 1) {
               // ensure we have enough data
               const hexString = addressBytes
@@ -172,7 +176,6 @@ export default function MainCon() {
                 .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
               const pairId = `0x${hexString}`;
-
               console.log("Found pair via factory:", {
                 rawResponse: response.results[0].returnValues,
                 addressBytes,
@@ -188,16 +191,24 @@ export default function MainCon() {
                 },
               });
 
-              if (pairObject.data?.content?.fields) {
+              // Add type guards for accessing fields
+              if (
+                pairObject.data?.content &&
+                "fields" in pairObject.data.content &&
+                typeof pairObject.data.content.fields === "object" &&
+                pairObject.data.content.fields &&
+                "reserve0" in pairObject.data.content.fields &&
+                "reserve1" in pairObject.data.content.fields &&
+                "block_timestamp_last" in pairObject.data.content.fields
+              ) {
                 const fields = pairObject.data.content.fields;
                 console.log(fields);
                 setReserves({
-                  reserve0: fields.reserve0,
-                  reserve1: fields.reserve1,
-                  timestamp: fields.block_timestamp_last,
+                  reserve0: fields.reserve0 as string,
+                  reserve1: fields.reserve1 as string,
+                  timestamp: fields.block_timestamp_last as number,
                 });
               }
-
               setPairExists(true);
               setCurrentPairId(pairId);
             } else {
@@ -231,7 +242,7 @@ export default function MainCon() {
     };
 
     checkPairExistence();
-  }, [token0, token1, suiClient]);
+  }, [token0, token1, suiClient, account?.address]);
 
   const sortTokens = (type0: string, type1: string): [string, string] => {
     if (type0 === type1) {
@@ -332,130 +343,6 @@ export default function MainCon() {
 
     calculateEstimatedOutput();
   }, [amount0, reserves, pairExists, token0, token1, suiClient]);
-  const handleSwap = async () => {
-    if (!account?.address) {
-      toast.error("Please connect your wallet");
-      return;
-    }
-
-    if (!token0 || !token1 || !amount0 || !pairExists) {
-      toast.error("Please fill in all fields and ensure pair exists");
-      return;
-    }
-
-    setIsSwapLoading(true);
-    const toastId = toast.loading("Processing swap...");
-
-    try {
-      const [token0Obj, token1Obj] = await Promise.all([
-        suiClient.getObject({ id: token0, options: { showType: true } }),
-        suiClient.getObject({ id: token1, options: { showType: true } }),
-      ]);
-
-      // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
-      if (!token0Obj?.data || !token1Obj?.data) {
-        throw new Error("Failed to retrieve token data");
-      }
-
-      const getBaseType = (coinType: string | null | undefined): string => {
-        if (!coinType) {
-          throw new Error("Coin type is undefined or null");
-        }
-        const match = coinType.match(/<(.+)>/);
-        return match ? match[1] : coinType;
-      };
-
-      const baseType0 = getBaseType(token0Obj.data.type);
-      const baseType1 = getBaseType(token1Obj.data.type);
-      console.log("Basetype0", baseType0);
-      console.log("Basetype1", baseType1);
-
-      // Retrieve the decimals for each token (assuming this is part of the token's metadata)
-      const getTokenDecimals = async (tokenObj: any): Promise<number> => {
-        // Assuming tokenObj.data contains decimals information (adjust based on actual structure)
-        return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
-      };
-
-      const decimals0 = await getTokenDecimals(token0Obj);
-      const decimals1 = await getTokenDecimals(token1Obj);
-
-      // Adjust for the dynamic decimal precision of each token
-      const amount0Value = Math.floor(
-        parseFloat(amount0) * Math.pow(10, decimals0)
-      );
-      const estimatedOutput = parseFloat(amount1);
-      const minimumAmountOut = Math.floor(
-        estimatedOutput * 0.95 * Math.pow(10, decimals1)
-      );
-
-      // Get available coins for the input token
-      const coins = await suiClient.getCoins({
-        owner: account.address,
-        coinType: baseType0,
-      });
-
-      // Find a coin with sufficient balance
-      const coinToUse = coins.data.find(
-        (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
-      );
-
-      if (!coinToUse) {
-        throw new Error("Insufficient balance");
-      }
-
-      // Create the swap transaction
-      const swapTx = new Transaction();
-
-      // Split the input coin
-      const [splitCoin] = swapTx.splitCoins(
-        swapTx.object(coinToUse.coinObjectId),
-        [swapTx.pure.u64(amount0Value)]
-      );
-
-      // Set deadline 20 minutes from now
-      const deadline = Math.floor(Date.now() + 1200000);
-      if (!currentPairId) {
-        throw new Error("Current pair ID is null");
-      }
-
-      // Add the swap call to the transaction
-      swapTx.moveCall({
-        target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
-        typeArguments: [baseType0, baseType1],
-        arguments: [
-          swapTx.object(CONSTANTS.ROUTER_ID),
-          swapTx.object(CONSTANTS.FACTORY_ID),
-          swapTx.object(currentPairId),
-          splitCoin,
-          swapTx.pure.u128(minimumAmountOut),
-          swapTx.pure.u64(deadline),
-        ],
-      });
-
-      // Execute the transaction
-      await signAndExecute(
-        { transaction: swapTx },
-        {
-          onSuccess: (result) => {
-            console.log("Swap successful:", result);
-            toast.success("Swap completed successfully!", { id: toastId });
-            // Reset input amounts
-            setAmount0("");
-            setAmount1("");
-          },
-          onError: (error) => {
-            console.error("Swap failed:", error);
-            throw error;
-          },
-        }
-      );
-    } catch (error: any) {
-      console.error("Swap failed:", error);
-      toast.error(`Swap failed: ${error.message}`, { id: toastId });
-    } finally {
-      setIsSwapLoading(false);
-    }
-  };
 
   const retryQueryEvent = async (createPairResult: any) => {
     try {
@@ -492,6 +379,13 @@ export default function MainCon() {
       throw error; // Rethrow the error for further handling
     }
   };
+
+  // Define the structure of the `PairCreatedEvent` clearly
+  interface PairCreatedEvent {
+    token0: { name: string };
+    token1: { name: string };
+    pair: string;
+  }
 
   const handleAddLiquidity = async () => {
     if (!account?.address) {
@@ -559,7 +453,13 @@ export default function MainCon() {
 
       // Find existing pair with normalized comparison
       const existingPair = pairs.data.find((event) => {
-        const fields = event.parsedJson;
+        const fields = event.parsedJson as PairCreatedEvent | undefined;
+
+        // If parsedJson is undefined or doesn't have token0, token1, or pair, skip the event
+        if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
+          return false;
+        }
+
         const type0Parts = sortedType0.split("::");
         const type1Parts = sortedType1.split("::");
         const normalizedType0 = `${normalizeSuiAddress(type0Parts[0])}::${
@@ -642,7 +542,13 @@ export default function MainCon() {
             });
 
             const existingPair = retryPairs.data.find((event) => {
-              const fields = event.parsedJson;
+              const fields = event.parsedJson as PairCreatedEvent | undefined;
+
+              // If parsedJson is undefined or doesn't have token0, token1, or pair, skip the event
+              if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
+                return false;
+              }
+
               const type0Parts = sortedType0.split("::");
               const type1Parts = sortedType1.split("::");
               const normalizedType0 = `${normalizeSuiAddress(type0Parts[0])}::${
@@ -804,6 +710,131 @@ export default function MainCon() {
       toast.error("Transaction failed: " + errorMessage, { id: toastId });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSwap = async () => {
+    if (!account?.address) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+
+    if (!token0 || !token1 || !amount0 || !pairExists) {
+      toast.error("Please fill in all fields and ensure pair exists");
+      return;
+    }
+
+    setIsSwapLoading(true);
+    const toastId = toast.loading("Processing swap...");
+
+    try {
+      const [token0Obj, token1Obj] = await Promise.all([
+        suiClient.getObject({ id: token0, options: { showType: true } }),
+        suiClient.getObject({ id: token1, options: { showType: true } }),
+      ]);
+
+      // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
+      if (!token0Obj?.data || !token1Obj?.data) {
+        throw new Error("Failed to retrieve token data");
+      }
+
+      const getBaseType = (coinType: string | null | undefined): string => {
+        if (!coinType) {
+          throw new Error("Coin type is undefined or null");
+        }
+        const match = coinType.match(/<(.+)>/);
+        return match ? match[1] : coinType;
+      };
+
+      const baseType0 = getBaseType(token0Obj.data.type);
+      const baseType1 = getBaseType(token1Obj.data.type);
+      console.log("Basetype0", baseType0);
+      console.log("Basetype1", baseType1);
+
+      // Retrieve the decimals for each token (assuming this is part of the token's metadata)
+      const getTokenDecimals = async (tokenObj: any): Promise<number> => {
+        // Assuming tokenObj.data contains decimals information (adjust based on actual structure)
+        return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
+      };
+
+      const decimals0 = await getTokenDecimals(token0Obj);
+      const decimals1 = await getTokenDecimals(token1Obj);
+
+      // Adjust for the dynamic decimal precision of each token
+      const amount0Value = Math.floor(
+        parseFloat(amount0) * Math.pow(10, decimals0)
+      );
+      const estimatedOutput = parseFloat(amount1);
+      const minimumAmountOut = Math.floor(
+        estimatedOutput * 0.95 * Math.pow(10, decimals1)
+      );
+
+      // Get available coins for the input token
+      const coins = await suiClient.getCoins({
+        owner: account.address,
+        coinType: baseType0,
+      });
+
+      // Find a coin with sufficient balance
+      const coinToUse = coins.data.find(
+        (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
+      );
+
+      if (!coinToUse) {
+        throw new Error("Insufficient balance");
+      }
+
+      // Create the swap transaction
+      const swapTx = new Transaction();
+
+      // Split the input coin
+      const [splitCoin] = swapTx.splitCoins(
+        swapTx.object(coinToUse.coinObjectId),
+        [swapTx.pure.u64(amount0Value)]
+      );
+
+      // Set deadline 20 minutes from now
+      const deadline = Math.floor(Date.now() + 1200000);
+      if (!currentPairId) {
+        throw new Error("Current pair ID is null");
+      }
+
+      // Add the swap call to the transaction
+      swapTx.moveCall({
+        target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
+        typeArguments: [baseType0, baseType1],
+        arguments: [
+          swapTx.object(CONSTANTS.ROUTER_ID),
+          swapTx.object(CONSTANTS.FACTORY_ID),
+          swapTx.object(currentPairId),
+          splitCoin,
+          swapTx.pure.u128(minimumAmountOut),
+          swapTx.pure.u64(deadline),
+        ],
+      });
+
+      // Execute the transaction
+      await signAndExecute(
+        { transaction: swapTx },
+        {
+          onSuccess: (result) => {
+            console.log("Swap successful:", result);
+            toast.success("Swap completed successfully!", { id: toastId });
+            // Reset input amounts
+            setAmount0("");
+            setAmount1("");
+          },
+          onError: (error) => {
+            console.error("Swap failed:", error);
+            throw error;
+          },
+        }
+      );
+    } catch (error: any) {
+      console.error("Swap failed:", error);
+      toast.error(`Swap failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsSwapLoading(false);
     }
   };
 
