@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import "@mysten/dapp-kit/dist/index.css";
+// import { motion, AnimatePresence } from "framer-motion";
+// import { ArrowDownCircle } from "lucide-react";
 
 import {
   useCurrentAccount,
@@ -20,7 +22,7 @@ export default function MainCon() {
   const [priceRate0, setPriceRate0] = useState<string | null>(null);
   const [priceRate1, setPriceRate1] = useState<string | null>(null);
   const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
-
+  const [estimatedOutput, setEstimatedOutput] = useState<number | null>(null);
   const [token0, setToken0] = useState("");
   const [token1, setToken1] = useState("");
   const [amount0, setAmount0] = useState("");
@@ -58,6 +60,30 @@ export default function MainCon() {
         });
     }
   }, []);
+
+  useEffect(() => {
+    const fetchBalance = async (
+      tokenId: string,
+      setBalance: (val: string) => void
+    ) => {
+      if (!tokenId || !account?.address) return;
+      try {
+        const coin = await suiClient.getObject({
+          id: tokenId,
+          options: { showContent: true },
+        });
+        if (coin.data?.content?.fields?.balance) {
+          setBalance(coin.data.content.fields.balance);
+        }
+      } catch (error) {
+        console.error("Error fetching balance:", error);
+      }
+    };
+
+    if (token0) fetchBalance(token0, setBalance0);
+    if (token1) fetchBalance(token1, setBalance1);
+  }, [token0, token1, account?.address, suiClient]);
+
   useEffect(() => {
     const calculateRates = () => {
       if (reserves.reserve0 === "0" || reserves.reserve1 === "0") {
@@ -87,6 +113,7 @@ export default function MainCon() {
         const suggested = (Number(amount0) * Number(priceRate0)).toFixed(6);
         console.log("Suggested amount:", suggested);
         setSuggestedAmount1(suggested);
+        console.log("Suggested amount:", suggestedAmount1);
       } else {
         setSuggestedAmount1(null);
       }
@@ -94,29 +121,6 @@ export default function MainCon() {
 
     suggestAmount();
   }, [amount0, priceRate0]);
-
-  useEffect(() => {
-    const fetchBalance = async (
-      tokenId: string,
-      setBalance: (val: string) => void
-    ) => {
-      if (!tokenId || !account?.address) return;
-      try {
-        const coin = await suiClient.getObject({
-          id: tokenId,
-          options: { showContent: true },
-        });
-        if (coin.data?.content?.fields?.balance) {
-          setBalance(coin.data.content.fields.balance);
-        }
-      } catch (error) {
-        console.error("Error fetching balance:", error);
-      }
-    };
-
-    if (token0) fetchBalance(token0, setBalance0);
-    if (token1) fetchBalance(token1, setBalance1);
-  }, [token0, token1, account?.address, suiClient]);
 
   // Add effect to check pair existence whenever tokens change
   useEffect(() => {
@@ -136,8 +140,12 @@ export default function MainCon() {
           return match ? match[1] : coinType;
         };
 
-        const baseType0 = getBaseType(token0Obj.data.type);
-        const baseType1 = getBaseType(token1Obj.data.type);
+        const baseType0 = token0Obj.data?.type
+          ? getBaseType(token0Obj.data.type)
+          : "";
+        const baseType1 = token1Obj.data?.type
+          ? getBaseType(token1Obj.data.type)
+          : "";
 
         const tx = new Transaction();
         tx.moveCall({
@@ -157,9 +165,10 @@ export default function MainCon() {
           if (Array.isArray(optionValue) && optionValue.length > 0) {
             const addressBytes = optionValue[0];
 
-            if (Array.isArray(addressBytes)) {
+            if (Array.isArray(addressBytes) && addressBytes.length > 1) {
+              // ensure we have enough data
               const hexString = addressBytes
-                .slice(1)
+                .slice(1) // remove the leading 0
                 .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
               const pairId = `0x${hexString}`;
@@ -192,19 +201,23 @@ export default function MainCon() {
               setPairExists(true);
               setCurrentPairId(pairId);
             } else {
-              console.log("No pair exists (empty option)");
+              console.log(
+                "Pair address is empty or malformed, no pair exists."
+              );
               setPairExists(false);
               setCurrentPairId(null);
               setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
             }
           } else {
-            console.log("No pair exists (invalid format)");
+            console.log(
+              "No pair exists (empty option value or invalid format)."
+            );
             setPairExists(false);
             setCurrentPairId(null);
             setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
           }
         } else {
-          console.log("No pair exists (no return value)");
+          console.log("No pair exists (no return value from the factory).");
           setPairExists(false);
           setCurrentPairId(null);
           setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
@@ -237,6 +250,247 @@ export default function MainCon() {
       }
     }
     return a.length < b.length;
+  };
+
+  useEffect(() => {
+    const calculateEstimatedOutput = async () => {
+      if (
+        !pairExists ||
+        !amount0 ||
+        !reserves.reserve0 ||
+        !reserves.reserve1 ||
+        !token0 ||
+        !token1
+      ) {
+        setEstimatedOutput(null);
+        return;
+      }
+
+      try {
+        // Get token types and decimals
+        const [token0Obj, token1Obj] = await Promise.all([
+          suiClient.getObject({ id: token0, options: { showType: true } }),
+          suiClient.getObject({ id: token1, options: { showType: true } }),
+        ]);
+
+        if (!token0Obj?.data || !token1Obj?.data) {
+          throw new Error("Failed to retrieve token data");
+        }
+
+        const getBaseType = (coinType: string | null | undefined): string => {
+          if (!coinType) {
+            throw new Error("Coin type is undefined or null");
+          }
+          const match = coinType.match(/<(.+)>/);
+          return match ? match[1] : coinType;
+        };
+
+        const baseType0 = getBaseType(token0Obj.data.type);
+        const baseType1 = getBaseType(token1Obj.data.type);
+
+        // Retrieve decimals for token0 and token1
+        const getTokenDecimals = (tokenObj: any): number => {
+          return tokenObj?.data?.decimals || 9; // Default to 9 decimals if not found
+        };
+
+        const decimals0 = getTokenDecimals(token0Obj);
+        const decimals1 = getTokenDecimals(token1Obj);
+
+        // Check if the input token is the first token in the sorted pair
+        const [firstSortedType] = sortTokens(baseType0, baseType1);
+        const isToken0First = baseType0 === firstSortedType;
+
+        // Calculate amount0 in the smallest unit (based on token0 decimals)
+        const amount0Value = Math.floor(
+          parseFloat(amount0) * Math.pow(10, decimals0)
+        );
+
+        // Use reserves in the correct order based on token positions
+        const reserveIn = BigInt(
+          isToken0First ? reserves.reserve0 : reserves.reserve1
+        );
+        const reserveOut = BigInt(
+          isToken0First ? reserves.reserve1 : reserves.reserve0
+        );
+
+        // Calculate swap output using the formula:
+        // amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
+        const amountInWithFee = BigInt(amount0Value) * 997n;
+        const numerator = amountInWithFee * reserveOut;
+        const denominator = reserveIn * 1000n + amountInWithFee;
+        const amountOut = numerator / denominator;
+
+        // Set estimated output with proper decimal formatting
+        setEstimatedOutput(Number(amountOut) / Math.pow(10, decimals1)); // Adjust to token1's decimals
+        setAmount1((Number(amountOut) / Math.pow(10, decimals1)).toFixed(6)); // Limit to 6 decimals
+      } catch (error) {
+        console.error("Error calculating output:", error);
+        setEstimatedOutput(null);
+        setAmount1("0.0");
+      }
+    };
+
+    calculateEstimatedOutput();
+  }, [amount0, reserves, pairExists, token0, token1, suiClient]);
+  const handleSwap = async () => {
+    if (!account?.address) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+
+    if (!token0 || !token1 || !amount0 || !pairExists) {
+      toast.error("Please fill in all fields and ensure pair exists");
+      return;
+    }
+
+    setIsSwapLoading(true);
+    const toastId = toast.loading("Processing swap...");
+
+    try {
+      const [token0Obj, token1Obj] = await Promise.all([
+        suiClient.getObject({ id: token0, options: { showType: true } }),
+        suiClient.getObject({ id: token1, options: { showType: true } }),
+      ]);
+
+      // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
+      if (!token0Obj?.data || !token1Obj?.data) {
+        throw new Error("Failed to retrieve token data");
+      }
+
+      const getBaseType = (coinType: string | null | undefined): string => {
+        if (!coinType) {
+          throw new Error("Coin type is undefined or null");
+        }
+        const match = coinType.match(/<(.+)>/);
+        return match ? match[1] : coinType;
+      };
+
+      const baseType0 = getBaseType(token0Obj.data.type);
+      const baseType1 = getBaseType(token1Obj.data.type);
+      console.log("Basetype0", baseType0);
+      console.log("Basetype1", baseType1);
+
+      // Retrieve the decimals for each token (assuming this is part of the token's metadata)
+      const getTokenDecimals = async (tokenObj: any): Promise<number> => {
+        // Assuming tokenObj.data contains decimals information (adjust based on actual structure)
+        return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
+      };
+
+      const decimals0 = await getTokenDecimals(token0Obj);
+      const decimals1 = await getTokenDecimals(token1Obj);
+
+      // Adjust for the dynamic decimal precision of each token
+      const amount0Value = Math.floor(
+        parseFloat(amount0) * Math.pow(10, decimals0)
+      );
+      const estimatedOutput = parseFloat(amount1);
+      const minimumAmountOut = Math.floor(
+        estimatedOutput * 0.95 * Math.pow(10, decimals1)
+      );
+
+      // Get available coins for the input token
+      const coins = await suiClient.getCoins({
+        owner: account.address,
+        coinType: baseType0,
+      });
+
+      // Find a coin with sufficient balance
+      const coinToUse = coins.data.find(
+        (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
+      );
+
+      if (!coinToUse) {
+        throw new Error("Insufficient balance");
+      }
+
+      // Create the swap transaction
+      const swapTx = new Transaction();
+
+      // Split the input coin
+      const [splitCoin] = swapTx.splitCoins(
+        swapTx.object(coinToUse.coinObjectId),
+        [swapTx.pure.u64(amount0Value)]
+      );
+
+      // Set deadline 20 minutes from now
+      const deadline = Math.floor(Date.now() + 1200000);
+      if (!currentPairId) {
+        throw new Error("Current pair ID is null");
+      }
+
+      // Add the swap call to the transaction
+      swapTx.moveCall({
+        target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
+        typeArguments: [baseType0, baseType1],
+        arguments: [
+          swapTx.object(CONSTANTS.ROUTER_ID),
+          swapTx.object(CONSTANTS.FACTORY_ID),
+          swapTx.object(currentPairId),
+          splitCoin,
+          swapTx.pure.u128(minimumAmountOut),
+          swapTx.pure.u64(deadline),
+        ],
+      });
+
+      // Execute the transaction
+      await signAndExecute(
+        { transaction: swapTx },
+        {
+          onSuccess: (result) => {
+            console.log("Swap successful:", result);
+            toast.success("Swap completed successfully!", { id: toastId });
+            // Reset input amounts
+            setAmount0("");
+            setAmount1("");
+          },
+          onError: (error) => {
+            console.error("Swap failed:", error);
+            throw error;
+          },
+        }
+      );
+    } catch (error: any) {
+      console.error("Swap failed:", error);
+      toast.error(`Swap failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsSwapLoading(false);
+    }
+  };
+
+  const retryQueryEvent = async (createPairResult: any) => {
+    try {
+      console.log(
+        "Querying for PairCreated event with digest:",
+        createPairResult.digest
+      );
+
+      // Query for the PairCreated event
+      const newPairEvent = await suiClient.queryEvents({
+        query: {
+          MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
+          Transaction: createPairResult.digest,
+        },
+      });
+
+      console.log("Raw response from queryEvents:", newPairEvent); // Log the entire response to check structure
+
+      if (
+        !newPairEvent ||
+        !newPairEvent.data ||
+        newPairEvent.data.length === 0
+      ) {
+        throw new Error("Pair creation event not found or empty response");
+      }
+
+      console.log(
+        "Successfully retrieved PairCreated event:",
+        newPairEvent.data
+      );
+      return newPairEvent; // Return the event data if found
+    } catch (error) {
+      console.error("Error during event query:", error);
+      throw error; // Rethrow the error for further handling
+    }
   };
 
   const handleAddLiquidity = async () => {
@@ -275,6 +529,14 @@ export default function MainCon() {
       const baseType1 = getBaseType(token1Obj.data.type);
       console.log("Base types extracted:", { baseType0, baseType1 });
 
+      // Retrieve decimals for token0 and token1
+      const getTokenDecimals = (tokenObj: any): number => {
+        return tokenObj?.data?.decimals || 9; // Default to 9 decimals if not found
+      };
+
+      const decimals0 = getTokenDecimals(token0Obj);
+      const decimals1 = getTokenDecimals(token1Obj);
+
       const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
       console.log("Sorted token types:", { sortedType0, sortedType1 });
 
@@ -298,30 +560,14 @@ export default function MainCon() {
       // Find existing pair with normalized comparison
       const existingPair = pairs.data.find((event) => {
         const fields = event.parsedJson;
-
-        // Extract token addresses from type strings
         const type0Parts = sortedType0.split("::");
         const type1Parts = sortedType1.split("::");
-
-        // Normalize addresses
         const normalizedType0 = `${normalizeSuiAddress(type0Parts[0])}::${
           type0Parts[1]
         }::${type0Parts[2]}`;
         const normalizedType1 = `${normalizeSuiAddress(type1Parts[0])}::${
           type1Parts[1]
         }::${type1Parts[2]}`;
-
-        console.log("Comparing token pairs:", {
-          pair: event.parsedJson.pair,
-          expectedToken0: normalizedType0,
-          eventToken0: fields.token0.name,
-          expectedToken1: normalizedType1,
-          eventToken1: fields.token1.name,
-          matches: {
-            token0: fields.token0.name === normalizedType0,
-            token1: fields.token1.name === normalizedType1,
-          },
-        });
 
         return (
           fields.token0.name === normalizedType0 &&
@@ -349,6 +595,7 @@ export default function MainCon() {
           token1Symbol: sortedType1.split("::").pop(),
         });
 
+        // Create pair call with necessary arguments
         tx.moveCall({
           target: `${CONSTANTS.PACKAGE_ID}::${CONSTANTS.MODULES.ROUTER}::create_pair`,
           arguments: [
@@ -356,37 +603,31 @@ export default function MainCon() {
             tx.object(CONSTANTS.FACTORY_ID),
             tx.pure.string(sortedType0.split("::").pop() || ""),
             tx.pure.string(sortedType1.split("::").pop() || ""),
+            // Add any additional parameters that are required by the create_pair function
+            tx.pure.u64(1000), // Example additional argument, such as liquidity ratio or other configuration values
           ],
           typeArguments: [sortedType0, sortedType1],
         });
 
         try {
-          signAndExecute(
-            { transaction: tx },
-            {
-              onError: (error) => {
-                console.error("Pair creation error:", error);
-                throw error;
-              },
-              onSuccess: (result) => {
-                console.log(result);
-                console.log("Pair creation transaction result:", result);
-              },
-            }
-          );
-
-          // Query for the newly created pair
-          const newPairEvent = await suiClient.queryEvents({
-            query: {
-              MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
-              Transaction: result.digest,
-            },
+          const createPairResult = await new Promise((resolve, reject) => {
+            signAndExecute(
+              { transaction: tx },
+              {
+                onError: reject,
+                onSuccess: resolve,
+              }
+            );
           });
 
-          console.log("New pair creation event:", newPairEvent.data);
+          console.log("Pair creation transaction result:", createPairResult);
+
+          // Query for the newly created pair with retry mechanism
+          let newPairEvent = await retryQueryEvent(createPairResult); // Retry querying the event
+
           pairId = newPairEvent.data[0]?.parsedJson?.pair;
           console.log("New pair ID:", pairId);
-        } catch (error) {
+        } catch (error: any) {
           console.log("Error during pair creation:", error);
           // If pair exists error, try to find the pair again
           if (error.message.includes("308")) {
@@ -439,8 +680,13 @@ export default function MainCon() {
       console.log("Proceeding to add liquidity to pair:", pairId);
       toast.loading("Adding liquidity...", { id: toastId });
 
-      const amount0Value = Math.floor(parseFloat(amount0) * 1e9);
-      const amount1Value = Math.floor(parseFloat(amount1) * 1e9);
+      // Calculate amounts in the smallest units (based on token decimals)
+      const amount0Value = Math.floor(
+        parseFloat(amount0) * Math.pow(10, decimals0)
+      );
+      const amount1Value = Math.floor(
+        parseFloat(amount1) * Math.pow(10, decimals1)
+      );
 
       console.log("Calculated amounts:", {
         amount0: amount0Value,
@@ -489,9 +735,7 @@ export default function MainCon() {
         [addLiquidityTx.pure.u64(amount1Value)]
       );
 
-      // Get current timestamp in milliseconds
       const currentTimestamp = Math.floor(Date.now());
-      // Add 20 minutes (1200000 milliseconds) to current timestamp
       const deadline = currentTimestamp + 1200000;
 
       console.log("Transaction timing:", {
@@ -500,7 +744,6 @@ export default function MainCon() {
         buffer: "20 minutes",
       });
 
-      // Calculate minimum amounts with 5% slippage
       const minAmount0 = (BigInt(amount0Value) * 95n) / 100n;
       const minAmount1 = (BigInt(amount1Value) * 95n) / 100n;
 
@@ -532,21 +775,21 @@ export default function MainCon() {
         typeArguments: [sortedType0, sortedType1],
       });
 
-      signAndExecute(
-        { transaction: addLiquidityTx },
-        {
-          onError: (error) => {
-            console.error("Error in add liquidity transaction:", error);
-            throw error;
-          },
-          onSuccess: (result) => {
-            console.log("Liquidity addition transaction result:", result);
-            toast.success("Liquidity added successfully!", { id: toastId });
-            setAmount0("");
-            setAmount1("");
-          },
-        }
-      );
+      await new Promise((resolve, reject) => {
+        signAndExecute(
+          { transaction: addLiquidityTx },
+          {
+            onError: reject,
+            onSuccess: (result) => {
+              console.log("Liquidity addition transaction result:", result);
+              toast.success("Liquidity added successfully!", { id: toastId });
+              setAmount0("");
+              setAmount1("");
+              resolve(result);
+            },
+          }
+        );
+      });
     } catch (error) {
       console.error("Transaction failed:", error);
       let errorMessage =
@@ -564,43 +807,168 @@ export default function MainCon() {
     }
   };
 
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSwapLoading, setIsSwapLoading] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsInitialLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <>
       {/* Main Content */}
       <main className="max-w-[480px] mx-auto pt-8 px-4">
-        <div className="mb-4 sm:mb-6 border-b border-gray-800">
-          <div className="flex space-x-4 sm:space-x-6">
-            <button
-              onClick={() => setActiveTab("exchange")}
-              className={`pb-2 px-1 text-sm sm:text-base ${
-                activeTab === "exchange"
-                  ? "text-green-500 border-b-2 border-green-500"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Exchange
-            </button>
-            <button
-              onClick={() => setActiveTab("liquidity")}
-              className={`pb-2 px-1 text-sm sm:text-base ${
-                activeTab === "liquidity"
-                  ? "text-green-500 border-b-2 border-green-500"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Liquidity
-            </button>
+        {/* Tab Navigation */}
+        <div className="mb-6 border rounded-2xl border-gray-800/50 backdrop-blur-sm relative bg-gradient-to-r from-gray-900/50 to-gray-800/50 p-1.5 shadow-lg">
+          <div className="relative flex items-center justify-center w-full">
+            {/* Background highlight for active tab */}
+            <div
+              className={`absolute h-full top-0 w-1/2 transition-all duration-300 ease-out rounded-xl bg-gradient-to-r from-cyan-500/10 to-cyan-400/5
+            ${activeTab === "exchange" ? "left-0" : "left-1/2"}`}
+            />
+
+            {/* Tabs */}
+            <div className="flex items-center justify-between w-full">
+              {["exchange", "liquidity"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`relative w-1/2 py-2 px-6 text-base font-medium transition-all duration-300 group
+                ${
+                  activeTab === tab
+                    ? "text-cyan-500"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+                >
+                  {/* Tab text with hover effect */}
+                  <span className="relative z-10 transition-transform duration-200 group-hover:transform group-hover:scale-105 inline-block">
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </span>
+
+                  {/* Active indicator line */}
+                  {activeTab === tab && (
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 flex flex-col items-center">
+                      <span className="h-0.5 w-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full animate-expandWidth" />
+                      <span className="h-1 w-1 bg-cyan-500 rounded-full mt-0.5 animate-pulse" />
+                    </div>
+                  )}
+
+                  {/* Hover glow effect */}
+                  <div
+                    className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg
+                  ${activeTab === tab ? "bg-cyan-500/5" : "bg-gray-500/5"}`}
+                  />
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Decorative elements */}
+          <div className="absolute -left-1 -top-1 w-2 h-2 bg-cyan-500/20 rounded-full animate-pulse" />
+          <div className="absolute -right-1 -bottom-1 w-2 h-2 bg-cyan-500/20 rounded-full animate-pulse delay-150" />
         </div>
 
-        {activeTab === "exchange" ? (
-          <div className="bg-[#222222] rounded-xl border border-gray-800">
-            <div className="p-3 sm:p-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs sm:text-sm text-gray-400">Swap</span>
-                <button className="p-1.5 sm:p-2 hover:bg-gray-700 rounded-lg">
+        {/* Content Area with Loading States */}
+        {isInitialLoading ? (
+          // Skeleton Loading State
+          <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700 p-4">
+            <div className="animate-pulse space-y-4">
+              <div className="h-6 bg-gray-700/50 bg-opacity-10 backdrop-blur-sm rounded-xl  w-1/4" />
+              <div className="h-14 bg-gray-700/50 bg-opacity-10 backdrop-blur-sm rounded-xl" />
+              <div className="h-10 bg-gray-700/50 bg-opacity-10 backdrop-blur-sm rounded-xl w-1/2 mx-auto" />
+              <div className="h-14 bg-gray-700/50 bg-opacity-10 backdrop-blur-sm rounded-xl" />
+              <div className="h-12 bg-gray-700/50 bg-opacity-10 backdrop-blur-sm rounded-xl" />
+            </div>
+          </div>
+        ) : activeTab === "exchange" ? (
+          <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700 p-4">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-sm text-gray-400">Swap</span>
+              <div className="text-sm text-gray-500 bg-gray-800/50 px-3 py-1 rounded-full">
+                Slippage: 5%
+              </div>
+            </div>
+
+            {/* Pair Info Card */}
+            {token0 && token1 && (
+              <div
+                className={`p-4 rounded-lg mb-4 ${
+                  pairExists
+                    ? "bg-green-500/5 border-green-500/20"
+                    : "bg-yellow-500/5 border-yellow-500/20"
+                } border`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        pairExists ? "text-green-500" : "text-yellow-500"
+                      }
+                    >
+                      {pairExists ? "✓" : "⚠"}
+                    </span>
+                    <div>
+                      <p className="text-sm">
+                        {pairExists
+                          ? "Trading Pair Active"
+                          : "New Trading Pair"}
+                      </p>
+                      {currentPairId && (
+                        <p className="text-xs text-gray-500">
+                          ID: {currentPairId?.slice(0, 8)}...
+                          {currentPairId?.slice(-6)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {pairExists && reserves.reserve0 !== "0" && (
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 mb-1">
+                        Pool Reserves
+                      </p>
+                      <p className="text-sm">
+                        {(Number(reserves.reserve0) / 1e9).toFixed(6)} /{" "}
+                        {(Number(reserves.reserve1) / 1e9).toFixed(6)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Token Input Section */}
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-400">You Pay</span>
+                  <span className="text-gray-400">
+                    Balance: {(parseFloat(balance0) / 1e9).toFixed(6)}
+                  </span>
+                </div>
+                <TokenSelector
+                  label="Token 0"
+                  onSelect={setToken0}
+                  amount={amount0}
+                  onAmountChange={setAmount0}
+                />
+              </div>
+
+              {/* Swap Direction Button */}
+              {/* <div className="relative flex justify-center">
+                <button
+                  onClick={() => {
+                    const tempToken = token0;
+                    const tempAmount = amount0;
+                    setToken0(token1);
+                    setAmount0(amount1);
+                    setToken1(tempToken);
+                    setAmount1(tempAmount);
+                  }}
+                  className="p-3 rounded-full border-2 border-gray-400 hover:border-cyan-600 bg-gray-700 hover:bg-gray-600 transition-all duration-300 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                >
                   <svg
-                    className="w-3 h-3 sm:w-4 sm:h-4"
+                    className="w-6 h-6 text-cyan-300 transform transition-transform duration-300 hover:rotate-180"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -609,87 +977,137 @@ export default function MainCon() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
                     />
                   </svg>
                 </button>
-              </div>
+              </div> */}
 
-              <div className="space-y-2">
-                {/* <TokenSelector label="Token 0" onSelect={setToken0} /> */}
-                <TokenSelector
-                  label="Token 0"
-                  onSelect={setToken0}
-                  amount={amount0}
-                  onAmountChange={(value) => {
-                    setAmount0(value);
-                    if (value && priceRate0) {
-                      const suggested = (
-                        Number(value) * Number(priceRate0)
-                      ).toFixed(6);
-                      setAmount1(suggested);
-                    }
-                  }}
-                />
-                {/* <TokenSelector label="Token 1" onSelect={setToken1} /> */}
+              {/* Token Output Section */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-400">You Receive</span>
+                  <span className="text-gray-400">
+                    Balance: {(parseFloat(balance1) / 1e9).toFixed(6)}
+                  </span>
+                </div>
                 <TokenSelector
                   label="Token 1"
                   onSelect={setToken1}
-                  amount={amount1}
+                  amount={estimatedOutput ? estimatedOutput.toFixed(6) : "0.0"}
                   onAmountChange={setAmount1}
                   readOnly={true}
                 />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-[#222222] rounded-xl border border-gray-800">
-            <div className="p-3 sm:p-4">
-              <div className="flex justify-between items-center mb-3 sm:mb-4">
-                <span className="text-xs sm:text-sm text-gray-400">
-                  Add Liquidity
-                </span>
-                {token0 && token1 && (
-                  <div
-                    className={`p-3 rounded-lg mb-4 ${
-                      pairExists ? "bg-green-100" : "bg-yellow-100"
-                    }`}
-                  >
-                    <p className="text-sm text-black">
-                      {pairExists ? (
-                        <>
-                          <div>{`✅ Trading pair exists (ID: ${currentPairId?.slice(
-                            0,
-                            8
-                          )}...)`}</div>
-                          <div>{`Reserves: ${(
-                            Number(reserves.reserve0) / 1e9
-                          ).toFixed(6)} - ${(
-                            Number(reserves.reserve1) / 1e9
-                          ).toFixed(6)}`}</div>
-                          {priceRate0 && priceRate1 && (
-                            <div className="mt-2 text-gray-600">
-                              <div>{`1 Token0 = ${priceRate0} Token1`}</div>
-                              <div>{`1 Token1 = ${priceRate1} Token0`}</div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        "⚠️ Trading pair needs to be created"
-                      )}
-                    </p>
+
+                {estimatedOutput && (
+                  <div className="mt-2 text-xs flex justify-between text-gray-500">
+                    <span>Minimum received after slippage</span>
+                    <span className="font-medium">
+                      {(estimatedOutput * 0.95).toFixed(6)}
+                    </span>
                   </div>
                 )}
               </div>
 
+              {/* Swap Button */}
+              <button
+                onClick={handleSwap}
+                disabled={
+                  isSwapLoading ||
+                  !token0 ||
+                  !token1 ||
+                  !amount0 ||
+                  !amount1 ||
+                  !pairExists
+                }
+                className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
+              >
+                {isSwapLoading ? (
+                  <div className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Processing Swap...
+                  </div>
+                ) : !pairExists ? (
+                  "No Trading Pair Available"
+                ) : (
+                  "Swap Tokens"
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700">
+            <div className="p-4">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-sm text-gray-400">Add Liquidity</span>
+                {token0 && token1 && (
+                  <div
+                    className={`px-3 py-2 rounded-lg text-sm ${
+                      pairExists
+                        ? "bg-green-500/10 text-green-500"
+                        : "bg-yellow-500/10 text-yellow-500"
+                    }`}
+                  >
+                    {pairExists ? "✓ Pair Exists" : "⚠ New Pair"}
+                  </div>
+                )}
+              </div>
+
+              {token0 && token1 && (
+                <div
+                  className={`p-4 rounded-lg mb-4 ${
+                    pairExists ? "bg-green-500/5" : "bg-yellow-500/5"
+                  } border ${
+                    pairExists ? "border-green-500/20" : "border-yellow-500/20"
+                  }`}
+                >
+                  {pairExists ? (
+                    <>
+                      <div className="text-sm text-gray-300">{`Pair ID: ${currentPairId?.slice(
+                        0,
+                        8
+                      )}...`}</div>
+                      <div className="text-sm text-gray-400 mt-1">{`Reserves: ${(
+                        Number(reserves.reserve0) / 1e9
+                      ).toFixed(6)} - ${(
+                        Number(reserves.reserve1) / 1e9
+                      ).toFixed(6)}`}</div>
+                      {priceRate0 && priceRate1 && (
+                        <div className="mt-2 text-sm text-gray-400">
+                          <div>{`1 Token0 = ${priceRate0} Token1`}</div>
+                          <div>{`1 Token1 = ${priceRate1} Token0`}</div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-yellow-500">
+                      New trading pair will be created
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-3 sm:space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="text-xs sm:text-sm text-gray-400">
                       First Token
@@ -712,7 +1130,6 @@ export default function MainCon() {
                       }
                     }}
                   />
-                  <div className="flex-1 min-w-0"></div>
                 </div>
 
                 <div className="space-y-2">
@@ -723,13 +1140,6 @@ export default function MainCon() {
                     <span className="text-xs sm:text-sm text-gray-400">
                       Balance: {(parseFloat(balance1) / 1e9).toFixed(6)}
                     </span>
-                    {/* <span className="text-xs sm:text-sm text-gray-200">
-                      {suggestedAmount1 && pairExists && (
-                        <span className="text-green-600">
-                          {` Suggested : ${suggestedAmount1}`}
-                        </span>
-                      )}
-                    </span> */}
                   </div>
                   <TokenSelector
                     label="Token 1"
@@ -740,26 +1150,49 @@ export default function MainCon() {
                   />
                 </div>
 
+                {/* Add Liquidity Button */}
                 <button
                   onClick={handleAddLiquidity}
                   disabled={
                     isLoading || !token0 || !token1 || !amount0 || !amount1
                   }
-                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-lg transition-colors duration-200 text-sm sm:text-base"
+                  className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
                 >
-                  {isLoading
-                    ? "Processing..."
-                    : pairExists
-                    ? "Add Liquidity"
-                    : "Create Pair & Add Liquidity"}
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Processing...
+                    </div>
+                  ) : pairExists ? (
+                    "Add Liquidity"
+                  ) : (
+                    "Create Pair & Add Liquidity"
+                  )}
                 </button>
               </div>
             </div>
           </div>
         )}
       </main>
-
-      {/* Version Info */}
     </>
   );
 }

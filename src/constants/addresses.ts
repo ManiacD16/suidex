@@ -1,16 +1,21 @@
 export const CONSTANTS = {
-    PACKAGE_ID: "0x8e3baa9498e077dc10245bce4e6fe1db0fac961fe24828b38681872fea9e0589",
-    ROUTER_ID: "0xc25ae5ef8b4c06b823accfab84e58cde664c1be12a26bdabde95e1b5bafdecbc",
-    FACTORY_ID: "0x2939889fcb84256eee4caa3f8dab1cf5d20a0ac39b6d8d24a0906636a7fd69c2",
-    ADMIN_CAP_ID: "0x660f7a1e7767d9236e366db302363e616a2dca9246fa91d617ea72d2f9353e21",
-    UPGRADE_CAP_ID: "0xc821212b9e214556b9f9ab6ce19352501e922b80c30ebd2273a47a53b98abe9e",
-    MODULES: {
-        FACTORY: "factory",
-        PAIR: "pair",
-        ROUTER: "router",
-        LIBRARY: "library",
-        MATH_U256: "math_u256"
-    },
-    // Add these based on token selections
-    getPairID: (token0: string, token1: string) => `${token0}_${token1}_pair`
+  PACKAGE_ID:
+    "0x38ddade24ce343b9a1ebe8973f4ac9dca9a4b769ce3d4e76f7f5d075c92bbe1a",
+  ROUTER_ID:
+    "0xb972f89ceb8f0a3b91728f76a3fa6a96c0b01e12f5285b285193dce3b5e55272",
+  FACTORY_ID:
+    "0x9fea2939c634be54954ea887b1b0f625f6bf5e385ef972957b84312028334578",
+  ADMIN_CAP_ID:
+    "0xc2e4eea112a50faa878a2587cddec0e8b79dbe0b09f4ffc5520cbca55e4d80c7",
+  UPGRADE_CAP_ID:
+    "0x3b09b1a41815884f4d55d5ec525cf2120da7b8226f448d275b7471b81e91bcee",
+  MODULES: {
+    FACTORY: "factory",
+    PAIR: "pair",
+    ROUTER: "router",
+    LIBRARY: "library",
+    MATH_U256: "math_u256",
+  },
+  // Add these based on token selections
+  getPairID: (token0: string, token1: string) => `${token0}_${token1}_pair`,
 };
