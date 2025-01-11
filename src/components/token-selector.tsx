@@ -250,7 +250,7 @@ export default function TokenSelector({
             {/* Dark Overlay */}
             <div className="absolute inset-0 z-1 bg-black opacity-40" />
             {/* Content stays above the background blur and overlay */}
-            <div className="relative z-10">
+            <div className="relative z-10 overflow-y-auto">
               <SimpleBar style={{ maxHeight: "500px" }}>
                 {/* Header */}
                 <div className="flex justify-between items-center mb-3 sm:mb-4">

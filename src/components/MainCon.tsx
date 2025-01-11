@@ -15,6 +15,22 @@ import { Transaction } from "@mysten/sui/transactions";
 import { toast } from "react-hot-toast";
 import { CONSTANTS } from "../constants/addresses";
 
+interface Token {
+  name: string;
+}
+
+interface ParsedEventJson {
+  pair: string;
+  token0: Token;
+  token1: Token;
+}
+
+interface PairCreatedEvent {
+  token0: Token;
+  token1: Token;
+  pair: string;
+}
+
 export default function MainCon() {
   const [activeTab, setActiveTab] = useState<string>("exchange");
   const [amount1, setAmount1] = useState<string>("");
@@ -351,7 +367,6 @@ export default function MainCon() {
         createPairResult.digest
       );
 
-      // Query for the PairCreated event
       const newPairEvent = await suiClient.queryEvents({
         query: {
           MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
@@ -359,7 +374,7 @@ export default function MainCon() {
         },
       });
 
-      console.log("Raw response from queryEvents:", newPairEvent); // Log the entire response to check structure
+      console.log("Raw response from queryEvents:", newPairEvent);
 
       if (
         !newPairEvent ||
@@ -369,23 +384,18 @@ export default function MainCon() {
         throw new Error("Pair creation event not found or empty response");
       }
 
-      console.log(
-        "Successfully retrieved PairCreated event:",
-        newPairEvent.data
-      );
-      return newPairEvent; // Return the event data if found
+      const eventData = newPairEvent.data[0]?.parsedJson as ParsedEventJson;
+      if (!eventData?.pair || !eventData?.token0 || !eventData?.token1) {
+        throw new Error("Invalid event data structure");
+      }
+
+      console.log("Successfully retrieved PairCreated event:", eventData);
+      return newPairEvent;
     } catch (error) {
       console.error("Error during event query:", error);
-      throw error; // Rethrow the error for further handling
+      throw error;
     }
   };
-
-  // Define the structure of the `PairCreatedEvent` clearly
-  interface PairCreatedEvent {
-    token0: { name: string };
-    token1: { name: string };
-    pair: string;
-  }
 
   const handleAddLiquidity = async () => {
     if (!account?.address) {
@@ -453,9 +463,8 @@ export default function MainCon() {
 
       // Find existing pair with normalized comparison
       const existingPair = pairs.data.find((event) => {
-        const fields = event.parsedJson as PairCreatedEvent | undefined;
+        const fields = event.parsedJson as ParsedEventJson;
 
-        // If parsedJson is undefined or doesn't have token0, token1, or pair, skip the event
         if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
           return false;
         }
@@ -475,7 +484,7 @@ export default function MainCon() {
         );
       });
 
-      let pairId = existingPair?.parsedJson?.pair;
+      let pairId = (existingPair?.parsedJson as ParsedEventJson)?.pair;
       console.log("Pair check result:", {
         pairFound: !!pairId,
         pairId,
@@ -523,9 +532,8 @@ export default function MainCon() {
           console.log("Pair creation transaction result:", createPairResult);
 
           // Query for the newly created pair with retry mechanism
-          let newPairEvent = await retryQueryEvent(createPairResult); // Retry querying the event
-
-          pairId = newPairEvent.data[0]?.parsedJson?.pair;
+          let newPairEvent = await retryQueryEvent(createPairResult);
+          pairId = (newPairEvent.data[0]?.parsedJson as ParsedEventJson)?.pair;
           console.log("New pair ID:", pairId);
         } catch (error: any) {
           console.log("Error during pair creation:", error);
@@ -542,9 +550,10 @@ export default function MainCon() {
             });
 
             const existingPair = retryPairs.data.find((event) => {
+              // Use type assertion here as well
               const fields = event.parsedJson as PairCreatedEvent | undefined;
 
-              // If parsedJson is undefined or doesn't have token0, token1, or pair, skip the event
+              // Ensure the event data has parsedJson, token0, token1, and pair
               if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
                 return false;
               }
@@ -1025,9 +1034,9 @@ export default function MainCon() {
                 <TokenSelector
                   label="Token 1"
                   onSelect={setToken1}
-                  amount={estimatedOutput ? estimatedOutput.toFixed(6) : "0.0"}
+                  amount={estimatedOutput ? estimatedOutput.toFixed(3) : "0.0"}
                   onAmountChange={setAmount1}
-                  readOnly={true}
+                  // readOnly={true}
                 />
 
                 {estimatedOutput && (
@@ -1177,7 +1186,7 @@ export default function MainCon() {
                     onSelect={setToken1}
                     amount={amount1}
                     onAmountChange={setAmount1}
-                    readOnly={true}
+                    // readOnly={true}
                   />
                 </div>
 
