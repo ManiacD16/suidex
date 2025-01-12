@@ -45,7 +45,7 @@ export default function MainCon() {
   // const [amount2, setAmount2] = useState<string>("0.0");
   const [priceRate0, setPriceRate0] = useState<string | null>(null);
   const [priceRate1, setPriceRate1] = useState<string | null>(null);
-  const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
+  // const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
   const [estimatedOutput, setEstimatedOutput] = useState<number | null>(null);
   const [token0, setToken0] = useState<Token | null>(null);
   const [token1, setToken1] = useState<Token | null>(null);
@@ -142,20 +142,40 @@ export default function MainCon() {
     calculateRates();
   }, [reserves]);
 
-  useEffect(() => {
-    const suggestAmount = () => {
-      if (amount0 && priceRate0 && reserves.reserve0 !== "0") {
-        const suggested = (Number(amount0) * Number(priceRate0)).toFixed(6);
-        console.log("Suggested amount:", suggested);
-        setSuggestedAmount1(suggested);
-        console.log("Suggested amount:", suggestedAmount1);
-      } else {
-        setSuggestedAmount1(null);
-      }
-    };
+  // useEffect(() => {
+  //   const suggestAmount = () => {
+  //     if (
+  //       amount0 &&
+  //       priceRate0 &&
+  //       reserves.reserve0 !== "0" &&
+  //       reserves.reserve1 !== "0"
+  //     ) {
+  //       // Consider the decimals of token0 and token1
+  //       const decimals0 = token0?.decimals || 9;
+  //       const decimals1 = token1?.decimals || 9;
 
-    suggestAmount();
-  }, [amount0, priceRate0]);
+  //       // Convert the input amount to the smallest unit for token0
+  //       const amount0InSmallestUnit =
+  //         parseFloat(amount0) * Math.pow(10, decimals0);
+
+  //       // Calculate the suggested amount in the smallest unit for token1
+  //       const suggestedAmountInSmallestUnit =
+  //         amount0InSmallestUnit * Number(priceRate0);
+
+  //       // Convert the suggested amount back to token1's decimal format
+  //       const suggestedAmount =
+  //         suggestedAmountInSmallestUnit / Math.pow(10, decimals1);
+
+  //       setSuggestedAmount1(suggestedAmount.toFixed(6)); // Adjust to 6 decimal places for display
+  //       console.log("Suggested amount:", suggestedAmount);
+
+  //     } else {
+  //       setSuggestedAmount1(null);
+  //     }
+  //   };
+
+  //   suggestAmount();
+  // }, [amount0, priceRate0, reserves, token0?.decimals, token1?.decimals]);
 
   // Add effect to check pair existence whenever tokens change
   useEffect(() => {
@@ -377,6 +397,138 @@ export default function MainCon() {
 
     calculateEstimatedOutput();
   }, [amount0, reserves, pairExists, token0, token1, suiClient]);
+
+  const handleSwap = async () => {
+    if (!account?.address) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+
+    if (!token0 || !token1 || !amount0 || !pairExists) {
+      toast.error("Please fill in all fields and ensure pair exists");
+      return;
+    }
+
+    setIsSwapLoading(true);
+    const toastId = toast.loading("Processing swap...");
+
+    try {
+      // Ensure token0 and token1 are strings before passing them to suiClient.getObject()
+      const token0Id = typeof token0 === "string" ? token0 : token0?.id; // Extract id if it's a Token
+      const token1Id = typeof token1 === "string" ? token1 : token1?.id; // Extract id if it's a Token
+
+      if (!token0Id || !token1Id) {
+        throw new Error("Token IDs are missing or invalid");
+      }
+
+      const [token0Obj, token1Obj] = await Promise.all([
+        suiClient.getObject({ id: token0Id, options: { showType: true } }),
+        suiClient.getObject({ id: token1Id, options: { showType: true } }),
+      ]);
+
+      // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
+      if (!token0Obj?.data || !token1Obj?.data) {
+        throw new Error("Failed to retrieve token data");
+      }
+
+      const getBaseType = (coinType: string | null | undefined): string => {
+        if (!coinType) {
+          throw new Error("Coin type is undefined or null");
+        }
+        const match = coinType.match(/<(.+)>/);
+        return match ? match[1] : coinType;
+      };
+
+      const baseType0 = getBaseType(token0Obj.data.type);
+      const baseType1 = getBaseType(token1Obj.data.type);
+      console.log("Basetype0", baseType0);
+      console.log("Basetype1", baseType1);
+
+      // Retrieve the decimals for each token (assuming this is part of the token's metadata)
+      const getTokenDecimals = async (tokenObj: any): Promise<number> => {
+        return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
+      };
+
+      const decimals0 = await getTokenDecimals(token0Obj);
+      const decimals1 = await getTokenDecimals(token1Obj);
+
+      // Adjust for the dynamic decimal precision of each token
+      const amount0Value = Math.floor(
+        parseFloat(amount0) * Math.pow(10, decimals0)
+      );
+      const estimatedOutput = parseFloat(amount1);
+      const minimumAmountOut = Math.floor(
+        estimatedOutput * 0.95 * Math.pow(10, decimals1)
+      );
+
+      // Get available coins for the input token
+      const coins = await suiClient.getCoins({
+        owner: account.address,
+        coinType: baseType0,
+      });
+
+      // Find a coin with sufficient balance
+      const coinToUse = coins.data.find(
+        (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
+      );
+
+      if (!coinToUse) {
+        throw new Error("Insufficient balance");
+      }
+
+      // Create the swap transaction
+      const swapTx = new Transaction();
+
+      // Split the input coin
+      const [splitCoin] = swapTx.splitCoins(
+        swapTx.object(coinToUse.coinObjectId),
+        [swapTx.pure.u64(amount0Value)]
+      );
+
+      // Set deadline 20 minutes from now
+      const deadline = Math.floor(Date.now() + 1200000);
+      if (!currentPairId) {
+        throw new Error("Current pair ID is null");
+      }
+
+      // Add the swap call to the transaction
+      swapTx.moveCall({
+        target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
+        typeArguments: [baseType0, baseType1],
+        arguments: [
+          swapTx.object(CONSTANTS.ROUTER_ID),
+          swapTx.object(CONSTANTS.FACTORY_ID),
+          swapTx.object(currentPairId),
+          splitCoin,
+          swapTx.pure.u128(minimumAmountOut),
+          swapTx.pure.u64(deadline),
+        ],
+      });
+
+      // Execute the transaction
+      await signAndExecute(
+        { transaction: swapTx },
+        {
+          onSuccess: (result) => {
+            console.log("Swap successful:", result);
+            toast.success("Swap completed successfully!", { id: toastId });
+            // Reset input amounts
+            setAmount0("");
+            setAmount1("");
+          },
+          onError: (error) => {
+            console.error("Swap failed:", error);
+            throw error;
+          },
+        }
+      );
+    } catch (error: any) {
+      console.error("Swap failed:", error);
+      toast.error(`Swap failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsSwapLoading(false);
+    }
+  };
 
   const retryQueryEvent = async (createPairResult: any) => {
     try {
@@ -740,138 +892,6 @@ export default function MainCon() {
       toast.error("Transaction failed: " + errorMessage, { id: toastId });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSwap = async () => {
-    if (!account?.address) {
-      toast.error("Please connect your wallet");
-      return;
-    }
-
-    if (!token0 || !token1 || !amount0 || !pairExists) {
-      toast.error("Please fill in all fields and ensure pair exists");
-      return;
-    }
-
-    setIsSwapLoading(true);
-    const toastId = toast.loading("Processing swap...");
-
-    try {
-      // Ensure token0 and token1 are strings before passing them to suiClient.getObject()
-      const token0Id = typeof token0 === "string" ? token0 : token0?.id; // Extract id if it's a Token
-      const token1Id = typeof token1 === "string" ? token1 : token1?.id; // Extract id if it's a Token
-
-      if (!token0Id || !token1Id) {
-        throw new Error("Token IDs are missing or invalid");
-      }
-
-      const [token0Obj, token1Obj] = await Promise.all([
-        suiClient.getObject({ id: token0Id, options: { showType: true } }),
-        suiClient.getObject({ id: token1Id, options: { showType: true } }),
-      ]);
-
-      // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
-      if (!token0Obj?.data || !token1Obj?.data) {
-        throw new Error("Failed to retrieve token data");
-      }
-
-      const getBaseType = (coinType: string | null | undefined): string => {
-        if (!coinType) {
-          throw new Error("Coin type is undefined or null");
-        }
-        const match = coinType.match(/<(.+)>/);
-        return match ? match[1] : coinType;
-      };
-
-      const baseType0 = getBaseType(token0Obj.data.type);
-      const baseType1 = getBaseType(token1Obj.data.type);
-      console.log("Basetype0", baseType0);
-      console.log("Basetype1", baseType1);
-
-      // Retrieve the decimals for each token (assuming this is part of the token's metadata)
-      const getTokenDecimals = async (tokenObj: any): Promise<number> => {
-        return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
-      };
-
-      const decimals0 = await getTokenDecimals(token0Obj);
-      const decimals1 = await getTokenDecimals(token1Obj);
-
-      // Adjust for the dynamic decimal precision of each token
-      const amount0Value = Math.floor(
-        parseFloat(amount0) * Math.pow(10, decimals0)
-      );
-      const estimatedOutput = parseFloat(amount1);
-      const minimumAmountOut = Math.floor(
-        estimatedOutput * 0.95 * Math.pow(10, decimals1)
-      );
-
-      // Get available coins for the input token
-      const coins = await suiClient.getCoins({
-        owner: account.address,
-        coinType: baseType0,
-      });
-
-      // Find a coin with sufficient balance
-      const coinToUse = coins.data.find(
-        (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
-      );
-
-      if (!coinToUse) {
-        throw new Error("Insufficient balance");
-      }
-
-      // Create the swap transaction
-      const swapTx = new Transaction();
-
-      // Split the input coin
-      const [splitCoin] = swapTx.splitCoins(
-        swapTx.object(coinToUse.coinObjectId),
-        [swapTx.pure.u64(amount0Value)]
-      );
-
-      // Set deadline 20 minutes from now
-      const deadline = Math.floor(Date.now() + 1200000);
-      if (!currentPairId) {
-        throw new Error("Current pair ID is null");
-      }
-
-      // Add the swap call to the transaction
-      swapTx.moveCall({
-        target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
-        typeArguments: [baseType0, baseType1],
-        arguments: [
-          swapTx.object(CONSTANTS.ROUTER_ID),
-          swapTx.object(CONSTANTS.FACTORY_ID),
-          swapTx.object(currentPairId),
-          splitCoin,
-          swapTx.pure.u128(minimumAmountOut),
-          swapTx.pure.u64(deadline),
-        ],
-      });
-
-      // Execute the transaction
-      await signAndExecute(
-        { transaction: swapTx },
-        {
-          onSuccess: (result) => {
-            console.log("Swap successful:", result);
-            toast.success("Swap completed successfully!", { id: toastId });
-            // Reset input amounts
-            setAmount0("");
-            setAmount1("");
-          },
-          onError: (error) => {
-            console.error("Swap failed:", error);
-            throw error;
-          },
-        }
-      );
-    } catch (error: any) {
-      console.error("Swap failed:", error);
-      toast.error(`Swap failed: ${error.message}`, { id: toastId });
-    } finally {
-      setIsSwapLoading(false);
     }
   };
 
