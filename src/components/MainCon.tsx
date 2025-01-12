@@ -16,7 +16,10 @@ import { toast } from "react-hot-toast";
 import { CONSTANTS } from "../constants/addresses";
 
 interface Token {
+  id: string; // The token ID is a string
   name: string;
+  symbol: string;
+  decimals: number;
 }
 
 interface ParsedEventJson {
@@ -31,6 +34,11 @@ interface PairCreatedEvent {
   pair: string;
 }
 
+const formatTokenAmount = (amount: string, decimals: number) => {
+  const formattedAmount = Number(amount) / Math.pow(10, decimals); // Adjust for the token's decimals
+  return formattedAmount.toFixed(Math.min(decimals, 6)); // Limit to a maximum of 6 decimal places for display
+};
+
 export default function MainCon() {
   const [activeTab, setActiveTab] = useState<string>("exchange");
   const [amount1, setAmount1] = useState<string>("");
@@ -39,8 +47,8 @@ export default function MainCon() {
   const [priceRate1, setPriceRate1] = useState<string | null>(null);
   const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
   const [estimatedOutput, setEstimatedOutput] = useState<number | null>(null);
-  const [token0, setToken0] = useState("");
-  const [token1, setToken1] = useState("");
+  const [token0, setToken0] = useState<Token | null>(null);
+  const [token1, setToken1] = useState<Token | null>(null);
   const [amount0, setAmount0] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
@@ -77,15 +85,16 @@ export default function MainCon() {
     }
   }, []);
 
+  // Fetch balance for a given token with the token's decimals
   useEffect(() => {
     const fetchBalance = async (
-      tokenId: string,
+      token: Token | null, // Pass token object that contains decimals
       setBalance: (val: string) => void
     ) => {
-      if (!tokenId || !account?.address) return;
+      if (!token?.id || !account?.address) return;
       try {
         const coin = await suiClient.getObject({
-          id: tokenId,
+          id: token.id, // Assuming token's name or ID is the token ID in this case
           options: { showContent: true },
         });
 
@@ -97,7 +106,10 @@ export default function MainCon() {
           coin.data.content.fields &&
           "balance" in coin.data.content.fields
         ) {
-          setBalance(coin.data.content.fields.balance as string);
+          const balance = coin.data.content.fields.balance as string;
+
+          // Format the balance with the token's decimals
+          setBalance(formatTokenAmount(balance, token.decimals));
         }
       } catch (error) {
         console.error("Error fetching balance:", error);
@@ -107,7 +119,6 @@ export default function MainCon() {
     if (token0) fetchBalance(token0, setBalance0);
     if (token1) fetchBalance(token1, setBalance1);
   }, [token0, token1, account?.address, suiClient]);
-
   useEffect(() => {
     const calculateRates = () => {
       if (reserves.reserve0 === "0" || reserves.reserve1 === "0") {
@@ -152,9 +163,15 @@ export default function MainCon() {
       if (!token0 || !token1) return;
       try {
         console.log("Checking pair existence for tokens:", { token0, token1 });
+
+        // Extract the ids from token0 and token1
+        const token0Id = token0.id;
+        const token1Id = token1.id;
+
+        // Now pass the ids as strings to getObject
         const [token0Obj, token1Obj] = await Promise.all([
-          suiClient.getObject({ id: token0, options: { showType: true } }),
-          suiClient.getObject({ id: token1, options: { showType: true } }),
+          suiClient.getObject({ id: token0Id, options: { showType: true } }),
+          suiClient.getObject({ id: token1Id, options: { showType: true } }),
         ]);
 
         const getBaseType = (coinType: string) => {
@@ -186,9 +203,8 @@ export default function MainCon() {
           if (Array.isArray(optionValue) && optionValue.length > 0) {
             const addressBytes = optionValue[0];
             if (Array.isArray(addressBytes) && addressBytes.length > 1) {
-              // ensure we have enough data
               const hexString = addressBytes
-                .slice(1) // remove the leading 0
+                .slice(1)
                 .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
               const pairId = `0x${hexString}`;
@@ -198,7 +214,6 @@ export default function MainCon() {
                 pairId,
               });
 
-              // Fetch reserves after finding pair
               const pairObject = await suiClient.getObject({
                 id: pairId,
                 options: {
@@ -207,7 +222,6 @@ export default function MainCon() {
                 },
               });
 
-              // Add type guards for accessing fields
               if (
                 pairObject.data?.content &&
                 "fields" in pairObject.data.content &&
@@ -294,10 +308,14 @@ export default function MainCon() {
       }
 
       try {
+        // Extract the IDs of token0 and token1
+        const token0Id = token0.id;
+        const token1Id = token1.id;
+
         // Get token types and decimals
         const [token0Obj, token1Obj] = await Promise.all([
-          suiClient.getObject({ id: token0, options: { showType: true } }),
-          suiClient.getObject({ id: token1, options: { showType: true } }),
+          suiClient.getObject({ id: token0Id, options: { showType: true } }),
+          suiClient.getObject({ id: token1Id, options: { showType: true } }),
         ]);
 
         if (!token0Obj?.data || !token1Obj?.data) {
@@ -415,12 +433,17 @@ export default function MainCon() {
       console.log("Starting liquidity addition process...");
       console.log("Selected tokens:", { token0, token1 });
 
+      // Ensure token0 and token1 are either IDs or objects. If they are objects, extract their ID.
+      const token0Id = typeof token0 === "string" ? token0 : token0.id; // Extract `id` if token0 is a Token object
+      const token1Id = typeof token1 === "string" ? token1 : token1.id; // Extract `id` if token1 is a Token object
+
+      // Fetch token data for both tokens
       const [token0Obj, token1Obj] = await Promise.all([
-        suiClient.getObject({ id: token0, options: { showType: true } }),
-        suiClient.getObject({ id: token1, options: { showType: true } }),
+        suiClient.getObject({ id: token0Id, options: { showType: true } }),
+        suiClient.getObject({ id: token1Id, options: { showType: true } }),
       ]);
 
-      if (!token0Obj.data?.type || !token1Obj.data?.type) {
+      if (!token0Obj?.data?.type || !token1Obj?.data?.type) {
         throw new Error("Invalid token types");
       }
 
@@ -550,10 +573,7 @@ export default function MainCon() {
             });
 
             const existingPair = retryPairs.data.find((event) => {
-              // Use type assertion here as well
               const fields = event.parsedJson as PairCreatedEvent | undefined;
-
-              // Ensure the event data has parsedJson, token0, token1, and pair
               if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
                 return false;
               }
@@ -608,6 +628,7 @@ export default function MainCon() {
         amount1: amount1Value,
       });
 
+      // Fetch available coins to split
       const [coins0, coins1] = await Promise.all([
         suiClient.getCoins({ owner: account.address, coinType: sortedType0 }),
         suiClient.getCoins({ owner: account.address, coinType: sortedType1 }),
@@ -737,9 +758,17 @@ export default function MainCon() {
     const toastId = toast.loading("Processing swap...");
 
     try {
+      // Ensure token0 and token1 are strings before passing them to suiClient.getObject()
+      const token0Id = typeof token0 === "string" ? token0 : token0?.id; // Extract id if it's a Token
+      const token1Id = typeof token1 === "string" ? token1 : token1?.id; // Extract id if it's a Token
+
+      if (!token0Id || !token1Id) {
+        throw new Error("Token IDs are missing or invalid");
+      }
+
       const [token0Obj, token1Obj] = await Promise.all([
-        suiClient.getObject({ id: token0, options: { showType: true } }),
-        suiClient.getObject({ id: token1, options: { showType: true } }),
+        suiClient.getObject({ id: token0Id, options: { showType: true } }),
+        suiClient.getObject({ id: token1Id, options: { showType: true } }),
       ]);
 
       // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
@@ -762,7 +791,6 @@ export default function MainCon() {
 
       // Retrieve the decimals for each token (assuming this is part of the token's metadata)
       const getTokenDecimals = async (tokenObj: any): Promise<number> => {
-        // Assuming tokenObj.data contains decimals information (adjust based on actual structure)
         return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
       };
 
@@ -982,9 +1010,7 @@ export default function MainCon() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-400">You Pay</span>
-                  <span className="text-gray-400">
-                    Balance: {(parseFloat(balance0) / 1e9).toFixed(6)}
-                  </span>
+                  <span className="text-gray-400">Balance: {balance0}</span>
                 </div>
                 <TokenSelector
                   label="Token 0"
@@ -1027,9 +1053,7 @@ export default function MainCon() {
               <div className="space-y-1">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-400">You Receive</span>
-                  <span className="text-gray-400">
-                    Balance: {(parseFloat(balance1) / 1e9).toFixed(6)}
-                  </span>
+                  <span className="text-gray-400">Balance: {balance1}</span>
                 </div>
                 <TokenSelector
                   label="Token 1"
@@ -1153,7 +1177,7 @@ export default function MainCon() {
                       First Token
                     </label>
                     <span className="text-xs sm:text-sm text-gray-400">
-                      Balance: {(parseFloat(balance0) / 1e9).toFixed(6)}
+                      Balance: {balance0}
                     </span>
                   </div>
                   <TokenSelector
@@ -1178,7 +1202,7 @@ export default function MainCon() {
                       Second Token
                     </label>
                     <span className="text-xs sm:text-sm text-gray-400">
-                      Balance: {(parseFloat(balance1) / 1e9).toFixed(6)}
+                      Balance: {balance1}
                     </span>
                   </div>
                   <TokenSelector

@@ -4,8 +4,17 @@ import SimpleBar from "simplebar-react";
 import "simplebar/dist/simplebar.min.css";
 
 // TokenSelector Component
+interface Token {
+  metadata: any;
+  id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  balance: string;
+}
+
 interface TokenSelectorProps {
-  onSelect: (tokenId: string) => void;
+  onSelect: (token: Token | null) => void; // Accept Token or null
   label: string;
   amount: string;
   onAmountChange: (amount: string) => void;
@@ -19,9 +28,9 @@ interface TokenInfo {
     name: string;
     symbol: string;
     image?: string;
-    decimals: number; // added decimals field
+    decimals: number;
   };
-  balance: string; // added balance field
+  balance: string;
 }
 
 const DEFAULT_TOKEN_IMAGE = "https://assets.crypto.ro/logos/sui-sui-logo.png";
@@ -42,7 +51,7 @@ export default function TokenSelector({
   onAmountChange,
 }: TokenSelectorProps) {
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
-  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null); // Use Token type here
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const suiClient = useSuiClient();
@@ -60,7 +69,6 @@ export default function TokenSelector({
         options: { showContent: true },
       });
 
-      // Type guard to check if it's a move object
       if (
         coin.data?.content &&
         "fields" in coin.data.content &&
@@ -69,7 +77,6 @@ export default function TokenSelector({
         "balance" in coin.data.content.fields
       ) {
         const rawBalance = coin.data.content.fields.balance as string;
-        // Handle balance with respect to decimals
         const formattedBalance = (
           parseInt(rawBalance, 10) / Math.pow(10, decimals)
         ).toFixed(2);
@@ -79,6 +86,7 @@ export default function TokenSelector({
       console.error("Error fetching balance:", error);
     }
   };
+
   useEffect(() => {
     async function getTokens() {
       if (!currentAccount) return;
@@ -111,14 +119,16 @@ export default function TokenSelector({
                 coinType: typeString.split("<")[1].split(">")[0],
               });
 
+              console.log("Fetched Metadata:", metadata); // Log the metadata for debugging
+
               const token: TokenInfo = {
                 id: obj.data!.objectId,
                 type: typeString,
                 metadata: {
                   name: metadata?.name || coinType,
                   symbol: metadata?.symbol || coinType,
-                  image: metadata?.iconUrl || DEFAULT_TOKEN_IMAGE,
-                  decimals: metadata?.decimals || 0, // fetch decimals
+                  image: metadata?.iconUrl || DEFAULT_TOKEN_IMAGE, // Fallback to default icon if no image is found
+                  decimals: metadata?.decimals || 0,
                 },
                 balance: "0", // initialize balance as string
               };
@@ -134,6 +144,7 @@ export default function TokenSelector({
 
               return token;
             } catch (err) {
+              console.error("Error fetching metadata:", err);
               return {
                 id: obj.data!.objectId,
                 type: typeString,
@@ -161,8 +172,18 @@ export default function TokenSelector({
   }, [suiClient, currentAccount]);
 
   const handleTokenSelect = (token: TokenInfo) => {
-    setSelectedToken(token);
-    onSelect(token.id);
+    // Convert TokenInfo to Token
+    const selected: Token = {
+      id: token.id,
+      name: token.metadata?.name || "",
+      symbol: token.metadata?.symbol || "",
+      decimals: token.metadata?.decimals || 0,
+      balance: token.balance,
+      metadata: token.metadata, // Retain metadata here for full token info
+    };
+
+    setSelectedToken(selected); // Use Token type here
+    onSelect(selected); // Pass the entire token object as Token
     setIsOpen(false);
   };
 
@@ -234,90 +255,47 @@ export default function TokenSelector({
               overflow: "hidden",
             }}
           >
-            {/* Background Image and Overlay */}
-            <div
-              className="absolute inset-0 z-0"
-              style={{
-                backgroundImage:
-                  "url(https://cryptologos.cc/logos/sui-sui-logo.png)",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-                filter: "blur(5px)",
-                opacity: 1,
-              }}
-            />
-            {/* Dark Overlay */}
-            <div className="absolute inset-0 z-1 bg-black opacity-40" />
-            {/* Content stays above the background blur and overlay */}
-            <div className="relative z-10 overflow-y-auto">
-              <SimpleBar style={{ maxHeight: "500px" }}>
-                {/* Header */}
-                <div className="flex justify-between items-center mb-3 sm:mb-4">
-                  <h3 className="text-lg sm:text-xl font-semibold text-white">
-                    Select Token
-                  </h3>
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="text-gray-400 hover:text-white transition-colors duration-200 hover:rotate-90 transform"
-                  >
-                    <svg
-                      className="w-5 h-5 sm:w-6 sm:h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+            <SimpleBar style={{ maxHeight: "500px" }}>
+              <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
+                {isLoading ? (
+                  <>
+                    <TokenSkeleton />
+                    <TokenSkeleton />
+                    <TokenSkeleton />
+                  </>
+                ) : tokens.length === 0 ? (
+                  <div className="text-center text-gray-400 py-4 animate-fadeIn">
+                    No tokens found in your wallet
+                  </div>
+                ) : (
+                  tokens.map((token, index) => (
+                    <button
+                      key={token.id}
+                      className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300  animate-slideIn"
+                      onClick={() => handleTokenSelect(token)}
+                      style={{
+                        animationDelay: `${index * 50}ms`,
+                      }}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
+                      <img
+                        src={token.metadata?.image || DEFAULT_TOKEN_IMAGE}
+                        alt={token.metadata?.symbol}
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-transform duration-300 group-hover:rotate-12"
                       />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
-                  {isLoading ? (
-                    <>
-                      <TokenSkeleton />
-                      <TokenSkeleton />
-                      <TokenSkeleton />
-                    </>
-                  ) : tokens.length === 0 ? (
-                    <div className="text-center text-gray-400 py-4 animate-fadeIn">
-                      No tokens found in your wallet
-                    </div>
-                  ) : (
-                    tokens.map((token, index) => (
-                      <button
-                        key={token.id}
-                        className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300  animate-slideIn"
-                        onClick={() => handleTokenSelect(token)}
-                        style={{
-                          animationDelay: `${index * 50}ms`,
-                        }}
-                      >
-                        <img
-                          src={token.metadata?.image || DEFAULT_TOKEN_IMAGE}
-                          alt={token.metadata?.symbol}
-                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-transform duration-300 group-hover:rotate-12"
-                        />
-                        <div className="text-left flex-1">
-                          <div className="font-medium text-white text-2xl transition-all duration-300 group-hover:text-[#3a6bc9]">
-                            {token.metadata?.name}
-                          </div>
-                          <div className="flex justify-between text-sm sm:text-base text-gray-400">
-                            <span>{token.metadata?.symbol}</span>
-                            <span>{token.balance}</span>
-                          </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-white text-2xl transition-all duration-300 group-hover:text-[#3a6bc9]">
+                          {token.metadata?.name}
                         </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </SimpleBar>
-            </div>
+                        <div className="flex justify-between text-sm sm:text-base text-gray-400">
+                          <span>{token.metadata?.symbol}</span>
+                          <span>{token.balance}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </SimpleBar>
           </div>
         </div>
       )}
