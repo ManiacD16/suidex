@@ -3,7 +3,6 @@ import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import SimpleBar from "simplebar-react";
 import "simplebar/dist/simplebar.min.css";
 
-// TokenSelector Component
 interface Token {
   metadata: any;
   id: string;
@@ -14,11 +13,12 @@ interface Token {
 }
 
 interface TokenSelectorProps {
-  onSelect: (token: Token | null) => void; // Accept Token or null
+  onSelect: (token: Token | null) => void;
   label: string;
   amount: string;
   onAmountChange: (amount: string) => void;
   readOnly?: boolean;
+  showInput?: boolean; // New prop to control input visibility
 }
 
 interface TokenInfo {
@@ -49,9 +49,10 @@ export default function TokenSelector({
   onSelect,
   amount,
   onAmountChange,
+  showInput = false,
 }: TokenSelectorProps) {
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
-  const [selectedToken, setSelectedToken] = useState<Token | null>(null); // Use Token type here
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const suiClient = useSuiClient();
@@ -119,24 +120,21 @@ export default function TokenSelector({
                 coinType: typeString.split("<")[1].split(">")[0],
               });
 
-              console.log("Fetched Metadata:", metadata); // Log the metadata for debugging
-
               const token: TokenInfo = {
                 id: obj.data!.objectId,
                 type: typeString,
                 metadata: {
                   name: metadata?.name || coinType,
                   symbol: metadata?.symbol || coinType,
-                  image: metadata?.iconUrl || DEFAULT_TOKEN_IMAGE, // Fallback to default icon if no image is found
+                  image: metadata?.iconUrl || DEFAULT_TOKEN_IMAGE,
                   decimals: metadata?.decimals || 0,
                 },
-                balance: "0", // initialize balance as string
+                balance: "0",
               };
 
-              // Fetch balance for the token
               await fetchBalance(
                 obj.data!.objectId,
-                metadata?.decimals || 0, // use fetched decimals
+                metadata?.decimals || 0,
                 (balance) => {
                   token.balance = balance;
                 }
@@ -154,7 +152,7 @@ export default function TokenSelector({
                   image: DEFAULT_TOKEN_IMAGE,
                   decimals: 0,
                 },
-                balance: "0", // initialize balance as string
+                balance: "0",
               };
             }
           });
@@ -172,39 +170,45 @@ export default function TokenSelector({
   }, [suiClient, currentAccount]);
 
   const handleTokenSelect = (token: TokenInfo) => {
-    // Convert TokenInfo to Token
     const selected: Token = {
       id: token.id,
       name: token.metadata?.name || "",
       symbol: token.metadata?.symbol || "",
       decimals: token.metadata?.decimals || 0,
       balance: token.balance,
-      metadata: token.metadata, // Retain metadata here for full token info
+      metadata: token.metadata,
     };
 
-    setSelectedToken(selected); // Use Token type here
-    onSelect(selected); // Pass the entire token object as Token
+    setSelectedToken(selected);
+    onSelect(selected);
     setIsOpen(false);
   };
 
   return (
     <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20">
-      <div className="flex justify-between items-center gap-2 sm:gap-3">
-        <div className="flex-1 min-w-0 relative">
-          <input
-            type="text"
-            value={amount}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^\d*\.?\d*$/.test(value) || value === "") {
-                onAmountChange(value);
-              }
-            }}
-            className="bg-transparent border-none text-lg sm:text-2xl w-full p-2 focus:outline-none text-white transition-all duration-200 focus:scale-105 origin-left"
-            placeholder="0.0"
-          />
-          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#3a6bc9] to-transparent opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-        </div>
+      <div
+        className={`flex ${
+          !showInput || !selectedToken ? "justify-center" : "justify-between"
+        } items-center gap-2 sm:gap-3`}
+      >
+        {showInput && selectedToken && (
+          <div className="flex-1 min-w-0 relative">
+            <input
+              type="text"
+              value={amount}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (/^\d*\.?\d*$/.test(value) || value === "") {
+                  onAmountChange(value);
+                }
+              }}
+              className="bg-transparent border-none text-lg sm:text-2xl w-full p-2 focus:outline-none text-white transition-all duration-200 focus:scale-105 origin-left"
+              placeholder="0.0"
+            />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#3a6bc9] to-transparent opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
+          </div>
+        )}
+
         <button
           onClick={() => setIsOpen(true)}
           className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2 py-1 sm:py-[0.4rem] rounded-full transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 active:scale-95 ${
@@ -249,11 +253,9 @@ export default function TokenSelector({
       {isOpen && (
         <div className="fixed inset-0 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
           <div
-            className="relative bg-[#222f3e] rounded-3xl p-4 sm:p-6 w-full max-w-md  border-2 border-[#2b4b8a] max-h-[90vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
+            className="relative bg-[#222f3e] rounded-3xl p-4 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[90vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              overflow: "hidden",
-            }}
+            style={{ overflow: "hidden" }}
           >
             <SimpleBar style={{ maxHeight: "500px" }}>
               <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
@@ -271,7 +273,7 @@ export default function TokenSelector({
                   tokens.map((token, index) => (
                     <button
                       key={token.id}
-                      className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300  animate-slideIn"
+                      className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300 animate-slideIn"
                       onClick={() => handleTokenSelect(token)}
                       style={{
                         animationDelay: `${index * 50}ms`,

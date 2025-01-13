@@ -22,17 +22,11 @@ interface Token {
   decimals: number;
 }
 
-interface ParsedEventJson {
-  pair: string;
-  token0: Token;
-  token1: Token;
-}
-
-interface PairCreatedEvent {
-  token0: Token;
-  token1: Token;
-  pair: string;
-}
+// interface ParsedEventJson {
+//   pair: string;
+//   token0: Token;
+//   token1: Token;
+// }
 
 const formatTokenAmount = (amount: string, decimals: number) => {
   const formattedAmount = Number(amount) / Math.pow(10, decimals); // Adjust for the token's decimals
@@ -42,10 +36,11 @@ const formatTokenAmount = (amount: string, decimals: number) => {
 export default function MainCon() {
   const [activeTab, setActiveTab] = useState<string>("exchange");
   const [amount1, setAmount1] = useState<string>("");
+  // const [checkTrigger, setCheckTrigger] = useState(0);
   // const [amount2, setAmount2] = useState<string>("0.0");
   const [priceRate0, setPriceRate0] = useState<string | null>(null);
   const [priceRate1, setPriceRate1] = useState<string | null>(null);
-  // const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
+  const [suggestedAmount1, setSuggestedAmount1] = useState<string | null>(null);
   const [estimatedOutput, setEstimatedOutput] = useState<number | null>(null);
   const [token0, setToken0] = useState<Token | null>(null);
   const [token1, setToken1] = useState<Token | null>(null);
@@ -61,6 +56,69 @@ export default function MainCon() {
     reserve1: "0",
     timestamp: 0,
   });
+
+  const resetAllValues = () => {
+    setAmount0("");
+    setAmount1("");
+    setPriceRate0(null);
+    setPriceRate1(null);
+    setSuggestedAmount1(null);
+    setEstimatedOutput(null);
+    setToken0(null);
+    setToken1(null);
+    setBalance0("0");
+    setBalance1("0");
+    setPairExists(false);
+    setCurrentPairId(null);
+    setReserves({
+      reserve0: "0",
+      reserve1: "0",
+      timestamp: 0,
+    });
+  };
+
+  // Reset when changing tabs
+  const handleTabChange = (tab: string) => {
+    resetAllValues();
+    setActiveTab(tab);
+  };
+
+  // Reset relevant values when changing tokens
+  const handleToken0Change = (newToken: Token | null) => {
+    setAmount0("");
+    setAmount1("");
+    setPriceRate0(null);
+    setPriceRate1(null);
+    setSuggestedAmount1(null);
+    setEstimatedOutput(null);
+    setBalance0("0");
+    setPairExists(false);
+    setCurrentPairId(null);
+    setReserves({
+      reserve0: "0",
+      reserve1: "0",
+      timestamp: 0,
+    });
+    setToken0(newToken);
+  };
+
+  const handleToken1Change = (newToken: Token | null) => {
+    setAmount0("");
+    setAmount1("");
+    setPriceRate0(null);
+    setPriceRate1(null);
+    setSuggestedAmount1(null);
+    setEstimatedOutput(null);
+    setBalance1("0");
+    setPairExists(false);
+    setCurrentPairId(null);
+    setReserves({
+      reserve0: "0",
+      reserve1: "0",
+      timestamp: 0,
+    });
+    setToken1(newToken);
+  };
 
   // const [liquidityAmount1, setLiquidityAmount1] = useState("0.0");
   // const [liquidityAmount2, setLiquidityAmount2] = useState("0.0");
@@ -142,53 +200,31 @@ export default function MainCon() {
     calculateRates();
   }, [reserves]);
 
-  // useEffect(() => {
-  //   const suggestAmount = () => {
-  //     if (
-  //       amount0 &&
-  //       priceRate0 &&
-  //       reserves.reserve0 !== "0" &&
-  //       reserves.reserve1 !== "0"
-  //     ) {
-  //       // Consider the decimals of token0 and token1
-  //       const decimals0 = token0?.decimals || 9;
-  //       const decimals1 = token1?.decimals || 9;
+  useEffect(() => {
+    const suggestAmount = () => {
+      if (amount0 && priceRate0 && reserves.reserve0 !== "0") {
+        const suggested = (Number(amount0) * Number(priceRate0)).toFixed(6);
+        console.log("Suggested amount:", suggested);
+        setSuggestedAmount1(suggested);
+        console.log("Suggested amount:", suggestedAmount1);
+      } else {
+        setSuggestedAmount1(null);
+      }
+    };
 
-  //       // Convert the input amount to the smallest unit for token0
-  //       const amount0InSmallestUnit =
-  //         parseFloat(amount0) * Math.pow(10, decimals0);
+    suggestAmount();
+  }, [amount0, priceRate0]);
 
-  //       // Calculate the suggested amount in the smallest unit for token1
-  //       const suggestedAmountInSmallestUnit =
-  //         amount0InSmallestUnit * Number(priceRate0);
-
-  //       // Convert the suggested amount back to token1's decimal format
-  //       const suggestedAmount =
-  //         suggestedAmountInSmallestUnit / Math.pow(10, decimals1);
-
-  //       setSuggestedAmount1(suggestedAmount.toFixed(6)); // Adjust to 6 decimal places for display
-  //       console.log("Suggested amount:", suggestedAmount);
-
-  //     } else {
-  //       setSuggestedAmount1(null);
-  //     }
-  //   };
-
-  //   suggestAmount();
-  // }, [amount0, priceRate0, reserves, token0?.decimals, token1?.decimals]);
-
-  // Add effect to check pair existence whenever tokens change
+  // Check pair existence function
   useEffect(() => {
     const checkPairExistence = async () => {
       if (!token0 || !token1) return;
       try {
         console.log("Checking pair existence for tokens:", { token0, token1 });
 
-        // Extract the ids from token0 and token1
         const token0Id = token0.id;
         const token1Id = token1.id;
 
-        // Now pass the ids as strings to getObject
         const [token0Obj, token1Obj] = await Promise.all([
           suiClient.getObject({ id: token0Id, options: { showType: true } }),
           suiClient.getObject({ id: token1Id, options: { showType: true } }),
@@ -228,11 +264,6 @@ export default function MainCon() {
                 .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
               const pairId = `0x${hexString}`;
-              console.log("Found pair via factory:", {
-                rawResponse: response.results[0].returnValues,
-                addressBytes,
-                pairId,
-              });
 
               const pairObject = await suiClient.getObject({
                 id: pairId,
@@ -252,7 +283,6 @@ export default function MainCon() {
                 "block_timestamp_last" in pairObject.data.content.fields
               ) {
                 const fields = pairObject.data.content.fields;
-                console.log(fields);
                 setReserves({
                   reserve0: fields.reserve0 as string,
                   reserve1: fields.reserve1 as string,
@@ -262,38 +292,29 @@ export default function MainCon() {
               setPairExists(true);
               setCurrentPairId(pairId);
             } else {
-              console.log(
-                "Pair address is empty or malformed, no pair exists."
-              );
-              setPairExists(false);
-              setCurrentPairId(null);
-              setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
+              resetPairState();
             }
           } else {
-            console.log(
-              "No pair exists (empty option value or invalid format)."
-            );
-            setPairExists(false);
-            setCurrentPairId(null);
-            setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
+            resetPairState();
           }
         } else {
-          console.log("No pair exists (no return value from the factory).");
-          setPairExists(false);
-          setCurrentPairId(null);
-          setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
+          resetPairState();
         }
       } catch (error) {
         console.error("Error during pair check:", error);
-        setPairExists(false);
-        setCurrentPairId(null);
-        setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
+        resetPairState();
       }
     };
 
     checkPairExistence();
   }, [token0, token1, suiClient, account?.address]);
 
+  // Reset pair state helper
+  const resetPairState = () => {
+    setPairExists(false);
+    setCurrentPairId(null);
+    setReserves({ reserve0: "0", reserve1: "0", timestamp: 0 });
+  };
   const sortTokens = (type0: string, type1: string): [string, string] => {
     if (type0 === type1) {
       throw new Error("Identical tokens");
@@ -529,67 +550,87 @@ export default function MainCon() {
       setIsSwapLoading(false);
     }
   };
+  // const [checkTrigger, setCheckTrigger] = useState(0);
 
-  const retryQueryEvent = async (createPairResult: any) => {
-    try {
-      console.log(
-        "Querying for PairCreated event with digest:",
-        createPairResult.digest
-      );
+  // Helper function to wait
+  // const delay = (ms: number) =>
+  //   new Promise((resolve) => setTimeout(resolve, ms));
+  // Helper function to wait
+  // const delay = (ms: number) =>
+  //   new Promise((resolve) => setTimeout(resolve, ms));
 
-      const newPairEvent = await suiClient.queryEvents({
-        query: {
-          MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
-          Transaction: createPairResult.digest,
-        },
-      });
+  // Modified retryQueryEvent function
+  // const retryQueryEvent = async (
+  //   sortedType0: string,
+  //   sortedType1: string,
+  //   maxRetries = 3
+  // ) => {
+  //   let retryCount = 0;
 
-      console.log("Raw response from queryEvents:", newPairEvent);
+  //   while (retryCount < maxRetries) {
+  //     try {
+  //       await delay(1000 * (retryCount + 1));
 
-      if (
-        !newPairEvent ||
-        !newPairEvent.data ||
-        newPairEvent.data.length === 0
-      ) {
-        throw new Error("Pair creation event not found or empty response");
-      }
+  //       // Query for pair without using digest
+  //       let newPairEvent = await suiClient.queryEvents({
+  //         query: {
+  //           MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
+  //         },
+  //       });
 
-      const eventData = newPairEvent.data[0]?.parsedJson as ParsedEventJson;
-      if (!eventData?.pair || !eventData?.token0 || !eventData?.token1) {
-        throw new Error("Invalid event data structure");
-      }
+  //       if (newPairEvent.data && newPairEvent.data.length > 0) {
+  //         // Try to find the matching pair for our token types
+  //         const matchingEvent = newPairEvent.data.find((event) => {
+  //           const eventData = event.parsedJson as any;
+  //           return (
+  //             eventData?.token0?.type === sortedType0 &&
+  //             eventData?.token1?.type === sortedType1
+  //           );
+  //         });
 
-      console.log("Successfully retrieved PairCreated event:", eventData);
-      return newPairEvent;
-    } catch (error) {
-      console.error("Error during event query:", error);
-      throw error;
-    }
-  };
+  //         if (matchingEvent) {
+  //           console.log("Found matching pair event:", matchingEvent);
+  //           return { data: [matchingEvent] };
+  //         }
+  //       }
 
-  const handleAddLiquidity = async () => {
+  //       retryCount++;
+  //       console.log(`Retry attempt ${retryCount} of ${maxRetries}`);
+  //       await delay(1000); // Wait before next retry
+  //     } catch (error) {
+  //       console.error(
+  //         `Error during event query attempt ${retryCount + 1}:`,
+  //         error
+  //       );
+  //       if (retryCount === maxRetries - 1) {
+  //         throw error;
+  //       }
+  //       retryCount++;
+  //     }
+  //   }
+
+  //   throw new Error("Failed to retrieve pair creation event after retries");
+  // };
+
+  // Modified handleCreatePair function
+  const handleCreatePair = async () => {
     if (!account?.address) {
       toast.error("Please connect your wallet");
       return;
     }
 
-    if (!token0 || !token1 || !amount0 || !amount1) {
-      toast.error("Please fill in all fields");
+    if (!token0 || !token1) {
+      toast.error("Please select both tokens");
       return;
     }
 
     setIsLoading(true);
-    const toastId = toast.loading("Processing transaction...");
+    const toastId = toast.loading("Creating new pair...");
 
     try {
-      console.log("Starting liquidity addition process...");
-      console.log("Selected tokens:", { token0, token1 });
+      const token0Id = typeof token0 === "string" ? token0 : token0.id;
+      const token1Id = typeof token1 === "string" ? token1 : token1.id;
 
-      // Ensure token0 and token1 are either IDs or objects. If they are objects, extract their ID.
-      const token0Id = typeof token0 === "string" ? token0 : token0.id; // Extract `id` if token0 is a Token object
-      const token1Id = typeof token1 === "string" ? token1 : token1.id; // Extract `id` if token1 is a Token object
-
-      // Fetch token data for both tokens
       const [token0Obj, token1Obj] = await Promise.all([
         suiClient.getObject({ id: token0Id, options: { showType: true } }),
         suiClient.getObject({ id: token1Id, options: { showType: true } }),
@@ -606,168 +647,130 @@ export default function MainCon() {
 
       const baseType0 = getBaseType(token0Obj.data.type);
       const baseType1 = getBaseType(token1Obj.data.type);
-      console.log("Base types extracted:", { baseType0, baseType1 });
+      const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
 
-      // Retrieve decimals for token0 and token1
+      // Create the pair transaction
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${CONSTANTS.PACKAGE_ID}::${CONSTANTS.MODULES.ROUTER}::create_pair`,
+        arguments: [
+          tx.object(CONSTANTS.ROUTER_ID),
+          tx.object(CONSTANTS.FACTORY_ID),
+          tx.pure.string(sortedType0.split("::").pop() || ""),
+          tx.pure.string(sortedType1.split("::").pop() || ""),
+          tx.pure.u64(1000),
+        ],
+        typeArguments: [sortedType0, sortedType1],
+      });
+
+      // Execute and wait for transaction confirmation
+      const createResult = await signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (result) => {
+            console.log("Transaction successful:", result);
+            // Only show success message after blockchain confirmation
+            toast.success("Pair creation transaction confirmed!", {
+              id: toastId,
+            });
+
+            // Trigger refresh after confirmation
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          },
+          onError: (error) => {
+            if (error.message.includes("308")) {
+              toast.error("This pair already exists", { id: toastId });
+            } else {
+              toast.error(`Transaction failed: ${error.message}`, {
+                id: toastId,
+              });
+            }
+            throw error;
+          },
+        }
+      );
+
+      return createResult;
+    } catch (error: any) {
+      console.error("Pair creation failed:", error);
+      let errorMessage = error.message || "Unknown error";
+
+      if (errorMessage.includes("308")) {
+        errorMessage = "Trading pair already exists";
+      }
+
+      toast.error("Failed to create pair: " + errorMessage, { id: toastId });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  // Function to add liquidity (requires amounts and existing pair)
+  const handleAddLiquidity = async () => {
+    if (!account?.address) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+
+    if (!token0 || !token1 || !amount0 || !amount1 || !currentPairId) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setIsLoading(true);
+    const toastId = toast.loading("Adding liquidity...");
+
+    try {
+      // Ensure token0 and token1 are strings before passing them to suiClient.getObject()
+      const token0Id = typeof token0 === "string" ? token0 : token0?.id;
+      const token1Id = typeof token1 === "string" ? token1 : token1?.id;
+
+      if (!token0Id || !token1Id) {
+        throw new Error("Token IDs are missing or invalid");
+      }
+
+      const [token0Obj, token1Obj] = await Promise.all([
+        suiClient.getObject({ id: token0Id, options: { showType: true } }),
+        suiClient.getObject({ id: token1Id, options: { showType: true } }),
+      ]);
+
+      if (!token0Obj?.data || !token1Obj?.data) {
+        throw new Error("Failed to retrieve token data");
+      }
+
+      const getBaseType = (coinType: string | null | undefined): string => {
+        if (!coinType) {
+          throw new Error("Coin type is undefined or null");
+        }
+        const match = coinType.match(/<(.+)>/);
+        return match ? match[1] : coinType;
+      };
+
+      const baseType0 = getBaseType(token0Obj.data.type);
+      const baseType1 = getBaseType(token1Obj.data.type);
+
+      const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
+
+      // Get token decimals using the same approach as handleSwap
       const getTokenDecimals = (tokenObj: any): number => {
-        return tokenObj?.data?.decimals || 9; // Default to 9 decimals if not found
+        if (
+          tokenObj?.data?.content &&
+          "fields" in tokenObj.data.content &&
+          typeof tokenObj.data.content.fields === "object" &&
+          tokenObj.data.content.fields &&
+          "decimals" in tokenObj.data.content.fields
+        ) {
+          return Number(tokenObj.data.content.fields.decimals);
+        }
+        return 9; // Default to 9 decimals if not found
       };
 
       const decimals0 = getTokenDecimals(token0Obj);
       const decimals1 = getTokenDecimals(token1Obj);
 
-      const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
-      console.log("Sorted token types:", { sortedType0, sortedType1 });
-
-      // Query existing pairs
-      const pairs = await suiClient.queryEvents({
-        query: {
-          MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
-        },
-      });
-
-      console.log("All existing pairs found:", pairs.data);
-
-      // Helper function to normalize SUI address format
-      const normalizeSuiAddress = (address: string) => {
-        if (address === "0x2") {
-          return "0000000000000000000000000000000000000000000000000000000000000002";
-        }
-        return address.replace("0x", "");
-      };
-
-      // Find existing pair with normalized comparison
-      const existingPair = pairs.data.find((event) => {
-        const fields = event.parsedJson as ParsedEventJson;
-
-        if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
-          return false;
-        }
-
-        const type0Parts = sortedType0.split("::");
-        const type1Parts = sortedType1.split("::");
-        const normalizedType0 = `${normalizeSuiAddress(type0Parts[0])}::${
-          type0Parts[1]
-        }::${type0Parts[2]}`;
-        const normalizedType1 = `${normalizeSuiAddress(type1Parts[0])}::${
-          type1Parts[1]
-        }::${type1Parts[2]}`;
-
-        return (
-          fields.token0.name === normalizedType0 &&
-          fields.token1.name === normalizedType1
-        );
-      });
-
-      let pairId = (existingPair?.parsedJson as ParsedEventJson)?.pair;
-      console.log("Pair check result:", {
-        pairFound: !!pairId,
-        pairId,
-        pairDetails: existingPair?.parsedJson,
-      });
-
-      if (!pairId) {
-        console.log("No existing pair found, creating new pair...");
-        toast.loading("Creating new pair...", { id: toastId });
-
-        const tx = new Transaction();
-
-        console.log("Creating pair with parameters:", {
-          token0: sortedType0,
-          token1: sortedType1,
-          token0Symbol: sortedType0.split("::").pop(),
-          token1Symbol: sortedType1.split("::").pop(),
-        });
-
-        // Create pair call with necessary arguments
-        tx.moveCall({
-          target: `${CONSTANTS.PACKAGE_ID}::${CONSTANTS.MODULES.ROUTER}::create_pair`,
-          arguments: [
-            tx.object(CONSTANTS.ROUTER_ID),
-            tx.object(CONSTANTS.FACTORY_ID),
-            tx.pure.string(sortedType0.split("::").pop() || ""),
-            tx.pure.string(sortedType1.split("::").pop() || ""),
-            // Add any additional parameters that are required by the create_pair function
-            tx.pure.u64(1000), // Example additional argument, such as liquidity ratio or other configuration values
-          ],
-          typeArguments: [sortedType0, sortedType1],
-        });
-
-        try {
-          const createPairResult = await new Promise((resolve, reject) => {
-            signAndExecute(
-              { transaction: tx },
-              {
-                onError: reject,
-                onSuccess: resolve,
-              }
-            );
-          });
-
-          console.log("Pair creation transaction result:", createPairResult);
-
-          // Query for the newly created pair with retry mechanism
-          let newPairEvent = await retryQueryEvent(createPairResult);
-          pairId = (newPairEvent.data[0]?.parsedJson as ParsedEventJson)?.pair;
-          console.log("New pair ID:", pairId);
-        } catch (error: any) {
-          console.log("Error during pair creation:", error);
-          // If pair exists error, try to find the pair again
-          if (error.message.includes("308")) {
-            console.log(
-              "Pair exists error detected, searching for existing pair..."
-            );
-
-            const retryPairs = await suiClient.queryEvents({
-              query: {
-                MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
-              },
-            });
-
-            const existingPair = retryPairs.data.find((event) => {
-              const fields = event.parsedJson as PairCreatedEvent | undefined;
-              if (!fields || !fields.token0 || !fields.token1 || !fields.pair) {
-                return false;
-              }
-
-              const type0Parts = sortedType0.split("::");
-              const type1Parts = sortedType1.split("::");
-              const normalizedType0 = `${normalizeSuiAddress(type0Parts[0])}::${
-                type0Parts[1]
-              }::${type0Parts[2]}`;
-              const normalizedType1 = `${normalizeSuiAddress(type1Parts[0])}::${
-                type1Parts[1]
-              }::${type1Parts[2]}`;
-
-              return (
-                fields.token0.name === normalizedType0 &&
-                fields.token1.name === normalizedType1
-              );
-            });
-
-            if (existingPair) {
-              pairId = (existingPair.parsedJson as { pair: string }).pair;
-              console.log("Found existing pair after error:", pairId);
-            } else {
-              throw new Error("Failed to find pair after creation attempt");
-            }
-          } else {
-            throw error;
-          }
-        }
-      }
-
-      if (!pairId) {
-        throw new Error("Failed to get pair ID");
-      }
-
-      setPairExists(true);
-      setCurrentPairId(pairId);
-
-      console.log("Proceeding to add liquidity to pair:", pairId);
-      toast.loading("Adding liquidity...", { id: toastId });
-
-      // Calculate amounts in the smallest units (based on token decimals)
+      // Calculate amounts with proper decimal handling
       const amount0Value = Math.floor(
         parseFloat(amount0) * Math.pow(10, decimals0)
       );
@@ -775,21 +778,11 @@ export default function MainCon() {
         parseFloat(amount1) * Math.pow(10, decimals1)
       );
 
-      console.log("Calculated amounts:", {
-        amount0: amount0Value,
-        amount1: amount1Value,
-      });
-
-      // Fetch available coins to split
+      // Check balances
       const [coins0, coins1] = await Promise.all([
         suiClient.getCoins({ owner: account.address, coinType: sortedType0 }),
         suiClient.getCoins({ owner: account.address, coinType: sortedType1 }),
       ]);
-
-      console.log("Available coins:", {
-        coins0: coins0.data,
-        coins1: coins1.data,
-      });
 
       const coinToSplit0 = coins0.data.find(
         (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
@@ -799,19 +792,8 @@ export default function MainCon() {
       );
 
       if (!coinToSplit0 || !coinToSplit1) {
-        console.log("Insufficient balance:", {
-          required0: amount0Value,
-          required1: amount1Value,
-          available0: coinToSplit0?.balance,
-          available1: coinToSplit1?.balance,
-        });
         throw new Error("Insufficient balance");
       }
-
-      console.log("Selected coins for splitting:", {
-        coin0: coinToSplit0,
-        coin1: coinToSplit1,
-      });
 
       const addLiquidityTx = new Transaction();
       const [splitCoin0] = addLiquidityTx.splitCoins(
@@ -823,33 +805,16 @@ export default function MainCon() {
         [addLiquidityTx.pure.u64(amount1Value)]
       );
 
-      const currentTimestamp = Math.floor(Date.now());
-      const deadline = currentTimestamp + 1200000;
-
-      console.log("Transaction timing:", {
-        currentTimestamp,
-        deadline,
-        buffer: "20 minutes",
-      });
-
-      const minAmount0 = (BigInt(amount0Value) * 95n) / 100n;
+      const deadline = Math.floor(Date.now() + 1200000); // 20 minutes
+      const minAmount0 = (BigInt(amount0Value) * 95n) / 100n; // 5% slippage
       const minAmount1 = (BigInt(amount1Value) * 95n) / 100n;
-
-      console.log("Adding liquidity with parameters:", {
-        pairId,
-        amount0: amount0Value,
-        amount1: amount1Value,
-        minAmount0,
-        minAmount1,
-        deadline,
-      });
 
       addLiquidityTx.moveCall({
         target: `${CONSTANTS.PACKAGE_ID}::${CONSTANTS.MODULES.ROUTER}::add_liquidity`,
         arguments: [
           addLiquidityTx.object(CONSTANTS.ROUTER_ID),
           addLiquidityTx.object(CONSTANTS.FACTORY_ID),
-          addLiquidityTx.object(pairId),
+          addLiquidityTx.object(currentPairId),
           splitCoin0,
           splitCoin1,
           addLiquidityTx.pure.u128(amount0Value),
@@ -863,37 +828,93 @@ export default function MainCon() {
         typeArguments: [sortedType0, sortedType1],
       });
 
-      await new Promise((resolve, reject) => {
-        signAndExecute(
-          { transaction: addLiquidityTx },
-          {
-            onError: reject,
-            onSuccess: (result) => {
-              console.log("Liquidity addition transaction result:", result);
-              toast.success("Liquidity added successfully!", { id: toastId });
-              setAmount0("");
-              setAmount1("");
-              resolve(result);
-            },
-          }
-        );
-      });
-    } catch (error) {
-      console.error("Transaction failed:", error);
-      let errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+      // In your handleAddLiquidity function, modify the onSuccess callback:
 
-      if (errorMessage.includes("308")) {
-        errorMessage = "Pair already exists, retrying...";
-      } else if (errorMessage.includes("Insufficient balance")) {
+      await signAndExecute(
+        { transaction: addLiquidityTx },
+        {
+          onSuccess: async (result) => {
+            console.log("Liquidity addition successful:", result);
+
+            // Refresh the reserves and rates
+            try {
+              const pairObject = await suiClient.getObject({
+                id: currentPairId,
+                options: {
+                  showContent: true,
+                  showType: true,
+                },
+              });
+
+              if (
+                pairObject.data?.content &&
+                "fields" in pairObject.data.content &&
+                typeof pairObject.data.content.fields === "object" &&
+                pairObject.data.content.fields &&
+                "reserve0" in pairObject.data.content.fields &&
+                "reserve1" in pairObject.data.content.fields &&
+                "block_timestamp_last" in pairObject.data.content.fields
+              ) {
+                const fields = pairObject.data.content.fields;
+
+                // Update reserves
+                setReserves({
+                  reserve0: fields.reserve0 as string,
+                  reserve1: fields.reserve1 as string,
+                  timestamp: fields.block_timestamp_last as number,
+                });
+
+                // Calculate and update price rates
+                const rate0 = (
+                  Number(fields.reserve1) / Number(fields.reserve0)
+                ).toFixed(6);
+                const rate1 = (
+                  Number(fields.reserve0) / Number(fields.reserve1)
+                ).toFixed(6);
+                setPriceRate0(rate0);
+                setPriceRate1(rate1);
+              }
+            } catch (error) {
+              console.error("Error refreshing reserves:", error);
+            }
+
+            // Clear inputs and show success message
+            setAmount0("");
+            setAmount1("");
+            toast.success("Liquidity added successfully!", { id: toastId });
+          },
+          onError: (error) => {
+            throw error;
+          },
+        }
+      );
+    } catch (error: any) {
+      console.error("Transaction failed:", error);
+      let errorMessage = error.message || "Unknown error";
+
+      if (errorMessage.includes("Insufficient balance")) {
         errorMessage = "Insufficient balance to complete the transaction";
       }
 
-      toast.error("Transaction failed: " + errorMessage, { id: toastId });
+      toast.error("Failed to add liquidity: " + errorMessage, { id: toastId });
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
+  // Combined function to handle both operations when needed
+  // const handleCreatePairAndAddLiquidity = async () => {
+  //   try {
+  //     // First create the pair
+  //     const pairId = await handleCreatePair();
+  //     if (pairId) {
+  //       // Then add liquidity
+  //       await handleAddLiquidity();
+  //     }
+  //   } catch (error) {
+  //     console.error("Create pair and add liquidity failed:", error);
+  //   }
+  // };
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSwapLoading, setIsSwapLoading] = useState(false);
@@ -921,7 +942,7 @@ export default function MainCon() {
               {["exchange", "liquidity"].map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => handleTabChange(tab)}
                   className={`relative w-1/2 py-2 px-6 text-base font-medium transition-all duration-300 group
                 ${
                   activeTab === tab
@@ -1016,8 +1037,19 @@ export default function MainCon() {
                         Pool Reserves
                       </p>
                       <p className="text-sm">
-                        {(Number(reserves.reserve0) / 1e9).toFixed(6)} /{" "}
-                        {(Number(reserves.reserve1) / 1e9).toFixed(6)}
+                        {token0
+                          ? (
+                              Number(reserves.reserve0) /
+                              Math.pow(10, token0.decimals)
+                            ).toFixed(6)
+                          : "0"}{" "}
+                        /{" "}
+                        {token1
+                          ? (
+                              Number(reserves.reserve1) /
+                              Math.pow(10, token1.decimals)
+                            ).toFixed(6)
+                          : "0"}
                       </p>
                     </div>
                   )}
@@ -1034,9 +1066,10 @@ export default function MainCon() {
                 </div>
                 <TokenSelector
                   label="Token 0"
-                  onSelect={setToken0}
+                  onSelect={handleToken0Change}
                   amount={amount0}
                   onAmountChange={setAmount0}
+                  showInput={pairExists} // Only show input if pair exists
                 />
               </div>
 
@@ -1077,10 +1110,10 @@ export default function MainCon() {
                 </div>
                 <TokenSelector
                   label="Token 1"
-                  onSelect={setToken1}
+                  onSelect={handleToken1Change}
                   amount={estimatedOutput ? estimatedOutput.toFixed(3) : "0.0"}
                   onAmountChange={setAmount1}
-                  // readOnly={true}
+                  showInput={pairExists} // Only show input if pair exists
                 />
 
                 {estimatedOutput && (
@@ -1095,14 +1128,12 @@ export default function MainCon() {
 
               {/* Swap Button */}
               <button
-                onClick={handleSwap}
+                onClick={pairExists ? handleSwap : handleCreatePair} // Use handleAddLiquidity when pair doesn't exist
                 disabled={
                   isSwapLoading ||
                   !token0 ||
                   !token1 ||
-                  !amount0 ||
-                  !amount1 ||
-                  !pairExists
+                  (!pairExists ? false : !amount0 || !amount1) // Only check amounts if pair exists
                 }
                 className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
               >
@@ -1128,10 +1159,25 @@ export default function MainCon() {
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                       />
                     </svg>
-                    Processing Swap...
+                    {pairExists ? "Processing Swap..." : "Creating Pair..."}
                   </div>
                 ) : !pairExists ? (
-                  "No Trading Pair Available"
+                  <div className="flex items-center justify-center gap-2">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                      />
+                    </svg>
+                    Create Trading Pair
+                  </div>
                 ) : (
                   "Swap Tokens"
                 )}
@@ -1170,11 +1216,24 @@ export default function MainCon() {
                         0,
                         8
                       )}...`}</div>
-                      <div className="text-sm text-gray-400 mt-1">{`Reserves: ${(
-                        Number(reserves.reserve0) / 1e9
-                      ).toFixed(6)} - ${(
-                        Number(reserves.reserve1) / 1e9
-                      ).toFixed(6)}`}</div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        {" "}
+                        {`Reserves: ${
+                          token0
+                            ? (
+                                Number(reserves.reserve0) /
+                                Math.pow(10, token0.decimals)
+                              ).toFixed(6)
+                            : "0"
+                        } - ${
+                          token1
+                            ? (
+                                Number(reserves.reserve1) /
+                                Math.pow(10, token1.decimals)
+                              ).toFixed(6)
+                            : "0"
+                        }`}
+                      </div>
                       {priceRate0 && priceRate1 && (
                         <div className="mt-2 text-sm text-gray-400">
                           <div>{`1 Token0 = ${priceRate0} Token1`}</div>
@@ -1202,7 +1261,7 @@ export default function MainCon() {
                   </div>
                   <TokenSelector
                     label="Token 0"
-                    onSelect={setToken0}
+                    onSelect={handleToken0Change}
                     amount={amount0}
                     onAmountChange={(value) => {
                       setAmount0(value);
@@ -1213,6 +1272,7 @@ export default function MainCon() {
                         setAmount1(suggested);
                       }
                     }}
+                    showInput={pairExists} // Only show input if pair exists
                   />
                 </div>
 
@@ -1227,18 +1287,21 @@ export default function MainCon() {
                   </div>
                   <TokenSelector
                     label="Token 1"
-                    onSelect={setToken1}
+                    onSelect={handleToken1Change}
                     amount={amount1}
                     onAmountChange={setAmount1}
-                    // readOnly={true}
+                    showInput={pairExists} // Only show input if pair exists
                   />
                 </div>
 
                 {/* Add Liquidity Button */}
                 <button
-                  onClick={handleAddLiquidity}
+                  onClick={pairExists ? handleAddLiquidity : handleCreatePair}
                   disabled={
-                    isLoading || !token0 || !token1 || !amount0 || !amount1
+                    isLoading ||
+                    !token0 ||
+                    !token1 ||
+                    (pairExists ? !amount0 || !amount1 : false) // Only check amounts if pair exists
                   }
                   className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
                 >
@@ -1257,19 +1320,49 @@ export default function MainCon() {
                           r="10"
                           stroke="currentColor"
                           strokeWidth="4"
-                        ></circle>
+                        />
                         <path
                           className="opacity-75"
                           fill="currentColor"
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
+                        />
                       </svg>
-                      Processing...
+                      {pairExists ? "Adding Liquidity..." : "Creating Pair..."}
                     </div>
                   ) : pairExists ? (
-                    "Add Liquidity"
+                    <div className="flex items-center justify-center gap-2">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                        />
+                      </svg>
+                      Add Liquidity
+                    </div>
                   ) : (
-                    "Create Pair & Add Liquidity"
+                    <div className="flex items-center justify-center gap-2">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                        />
+                      </svg>
+                      Create Trading Pair
+                    </div>
                   )}
                 </button>
               </div>
