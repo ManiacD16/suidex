@@ -189,10 +189,10 @@ export default function MainCon() {
       // Calculate price rates (1 token0 = X token1 and vice versa)
       const rate0 = (
         Number(reserves.reserve1) / Number(reserves.reserve0)
-      ).toFixed(6);
+      ).toFixed(3);
       const rate1 = (
         Number(reserves.reserve0) / Number(reserves.reserve1)
-      ).toFixed(6);
+      ).toFixed(3);
 
       setPriceRate0(rate0);
       setPriceRate1(rate1);
@@ -204,7 +204,7 @@ export default function MainCon() {
   useEffect(() => {
     const suggestAmount = () => {
       if (amount0 && priceRate0 && reserves.reserve0 !== "0") {
-        const suggested = (Number(amount0) * Number(priceRate0)).toFixed(6);
+        const suggested = (Number(amount0) * Number(priceRate0)).toFixed(3);
         console.log("Suggested amount:", suggested);
         setSuggestedAmount1(suggested);
         console.log("Suggested amount:", suggestedAmount1);
@@ -409,7 +409,7 @@ export default function MainCon() {
 
         // Set estimated output with proper decimal formatting
         setEstimatedOutput(Number(amountOut) / Math.pow(10, decimals1)); // Adjust to token1's decimals
-        setAmount1((Number(amountOut) / Math.pow(10, decimals1)).toFixed(6)); // Limit to 6 decimals
+        setAmount1((Number(amountOut) / Math.pow(10, decimals1)).toFixed(3)); // Limit to 6 decimals
       } catch (error) {
         console.error("Error calculating output:", error);
         setEstimatedOutput(null);
@@ -867,10 +867,10 @@ export default function MainCon() {
                 // Calculate and update price rates
                 const rate0 = (
                   Number(fields.reserve1) / Number(fields.reserve0)
-                ).toFixed(6);
+                ).toFixed(3);
                 const rate1 = (
                   Number(fields.reserve0) / Number(fields.reserve1)
-                ).toFixed(6);
+                ).toFixed(3);
                 setPriceRate0(rate0);
                 setPriceRate1(rate1);
               }
@@ -1061,14 +1061,14 @@ export default function MainCon() {
                           ? (
                               Number(reserves.reserve0) /
                               Math.pow(10, token0.decimals)
-                            ).toFixed(6)
+                            ).toFixed(3)
                           : "0"}{" "}
                         /{" "}
                         {token1
                           ? (
                               Number(reserves.reserve1) /
                               Math.pow(10, token1.decimals)
-                            ).toFixed(6)
+                            ).toFixed(3)
                           : "0"}
                       </p>
                     </div>
@@ -1101,7 +1101,7 @@ export default function MainCon() {
                     <div className="flex justify-between text-sm text-gray-400">
                       <span>Minimum received after slippage:</span>
                       <span>
-                        {(estimatedOutput * (1 - slippage / 100)).toFixed(6)}{" "}
+                        {(estimatedOutput * (1 - slippage / 100)).toFixed(3)}{" "}
                         {token1?.symbol}
                       </span>
                     </div>
@@ -1208,14 +1208,14 @@ export default function MainCon() {
                             ? (
                                 Number(reserves.reserve0) /
                                 Math.pow(10, token0.decimals)
-                              ).toFixed(6)
+                              ).toFixed(3)
                             : "0"
                         } - ${
                           token1
                             ? (
                                 Number(reserves.reserve1) /
                                 Math.pow(10, token1.decimals)
-                              ).toFixed(6)
+                              ).toFixed(3)
                             : "0"
                         }`}
                       </div>
@@ -1253,7 +1253,7 @@ export default function MainCon() {
                       if (value && priceRate0) {
                         const suggested = (
                           Number(value) * Number(priceRate0)
-                        ).toFixed(6);
+                        ).toFixed(3);
                         setAmount1(suggested);
                       }
                     }}

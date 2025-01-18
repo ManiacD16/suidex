@@ -346,7 +346,7 @@ export default function Header() {
                       autoFocus
                       className="w-full h-[42px] bg-gray-800/50 text-gray-200 pl-9 pr-8 rounded-xl border border-cyan-500 ring-1 ring-cyan-500/50 focus:outline-none"
                     />
-                    {searchQuery && (
+                    {/* {searchQuery && (
                       <div className="absolute right-3 h-full flex items-center top-0">
                         <button
                           onClick={clearSearch}
@@ -355,7 +355,7 @@ export default function Header() {
                           <X className="h-4 w-4" />
                         </button>
                       </div>
-                    )}
+                    )} */}
                   </div>
                   <button
                     onClick={() => {
@@ -364,7 +364,7 @@ export default function Header() {
                     }}
                     className="text-gray-400 hover:text-gray-200"
                   >
-                    Cancel
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
 

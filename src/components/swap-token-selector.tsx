@@ -83,7 +83,7 @@ const TokenInput: React.FC<TokenInputProps> = ({
 
   const formatTokenAmount = (amount: string, decimals: number): string => {
     const formattedAmount = Number(amount) / Math.pow(10, decimals);
-    return formattedAmount.toFixed(Math.min(decimals, 6));
+    return formattedAmount.toFixed(Math.min(decimals, 2));
   };
 
   const fetchTokenBalance = async (
@@ -217,7 +217,7 @@ const TokenInput: React.FC<TokenInputProps> = ({
         <span className="text-gray-400">{label}</span>
         <span className="text-gray-400">Balance: {balance}</span>
       </div>
-      <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-cyan-500 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/20">
+      <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20">
         <div className="space-y-2">
           <div
             className={`flex ${
@@ -225,19 +225,22 @@ const TokenInput: React.FC<TokenInputProps> = ({
             } items-center gap-2`}
           >
             {showInput && token && (
-              <input
-                type="text"
-                value={amount}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (/^\d*\.?\d*$/.test(value) || value === "") {
-                    onAmountChange(value);
-                  }
-                }}
-                className="bg-transparent border-none text-lg sm:text-2xl w-full p-2 focus:outline-none text-white"
-                placeholder="0.0"
-                readOnly={!isInput}
-              />
+              <div className="flex-1 min-w-0 relative">
+                <input
+                  type="text"
+                  value={amount}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*\.?\d*$/.test(value) || value === "") {
+                      onAmountChange(value);
+                    }
+                  }}
+                  className="bg-transparent border-none text-lg sm:text-2xl w-full p-2 focus:outline-none text-white transition-all duration-200 focus:scale-105 origin-left"
+                  placeholder="0.0"
+                  readOnly={!isInput}
+                />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#3a6bc9] to-transparent opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
+              </div>
             )}
             <button
               onClick={() => setIsOpen(true)}
@@ -252,9 +255,11 @@ const TokenInput: React.FC<TokenInputProps> = ({
                   <img
                     src={token.metadata?.image || DEFAULT_TOKEN_IMAGE}
                     alt={token.symbol}
-                    className="w-6 h-6 rounded-full"
+                    className="w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-transform duration-300 hover:rotate-12"
                   />
-                  <span className="text-gray-300">{token.symbol}</span>
+                  <span className="font-medium text-gray-300 text-sm sm:text-base">
+                    {token.symbol}
+                  </span>
                 </>
               ) : (
                 <span className="text-gray-600 font-semibold">
@@ -262,12 +267,13 @@ const TokenInput: React.FC<TokenInputProps> = ({
                 </span>
               )}
               <svg
-                className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${
-                  isOpen ? "rotate-180" : ""
-                }`}
+                className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600 transition-transform duration-300"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                style={{
+                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
               >
                 <path
                   strokeLinecap="round"
@@ -281,24 +287,50 @@ const TokenInput: React.FC<TokenInputProps> = ({
         </div>
 
         {isOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
             <div
               ref={modalRef}
-              className="bg-gray-800 rounded-2xl p-4 w-full max-w-md mx-4"
+              className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
+              style={{ overflow: "hidden" }}
             >
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white">
-                  Select Token
-                </h3>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-              <SimpleBar style={{ maxHeight: "60vh" }}>
-                <div className="space-y-2">
+              {/* Background Image and Overlay */}
+              <div
+                className="absolute inset-0 z-0"
+                style={{
+                  backgroundImage:
+                    "url(https://cryptologos.cc/logos/sui-sui-logo.png)",
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundRepeat: "no-repeat",
+                  filter: "blur(5px)",
+                  opacity: 1,
+                }}
+              />
+              <SimpleBar style={{ maxHeight: "500px" }}>
+                <div className="flex justify-between items-center mb-3 sm:mb-4">
+                  <h3 className="text-lg sm:text-xl font-semibold text-white">
+                    Select Token
+                  </h3>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="text-gray-400 hover:text-white transition-colors duration-200 hover:rotate-90 transform"
+                  >
+                    <svg
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
                   {isLoading ? (
                     <>
                       <TokenSkeleton />
@@ -306,14 +338,14 @@ const TokenInput: React.FC<TokenInputProps> = ({
                       <TokenSkeleton />
                     </>
                   ) : tokens.length === 0 ? (
-                    <div className="text-center text-gray-400 py-4">
-                      No tokens found
+                    <div className="text-center text-gray-400 py-4 animate-fadeIn">
+                      No tokens found in your wallet
                     </div>
                   ) : (
-                    tokens.map((token) => (
+                    tokens.map((token, index) => (
                       <button
                         key={token.id}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-700/50 transition-colors"
+                        className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300 animate-slideIn"
                         onClick={() => {
                           onTokenSelect({
                             id: token.id,
@@ -324,22 +356,23 @@ const TokenInput: React.FC<TokenInputProps> = ({
                           });
                           setIsOpen(false);
                         }}
+                        style={{
+                          animationDelay: `${index * 50}ms`,
+                        }}
                       >
                         <img
                           src={token.metadata?.image || DEFAULT_TOKEN_IMAGE}
                           alt={token.metadata?.symbol}
-                          className="w-8 h-8 rounded-full"
+                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-transform duration-300 group-hover:rotate-12"
                         />
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-white">
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-white text-2xl transition-all duration-300 group-hover:text-[#3a6bc9]">
                             {token.metadata?.name}
                           </div>
-                          <div className="text-sm text-gray-400">
-                            {token.metadata?.symbol}
+                          <div className="flex justify-between text-sm sm:text-base text-gray-200">
+                            <span>{token.metadata?.symbol}</span>
+                            <span>{token.balance}</span>
                           </div>
-                        </div>
-                        <div className="text-right text-gray-400">
-                          {token.balance}
                         </div>
                       </button>
                     ))
@@ -373,7 +406,7 @@ const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
 
   const formatTokenAmount = (amount: string, decimals: number): string => {
     const formattedAmount = Number(amount) / Math.pow(10, decimals);
-    return formattedAmount.toFixed(Math.min(decimals, 6));
+    return formattedAmount.toFixed(Math.min(decimals, 2));
   };
 
   useEffect(() => {

@@ -274,7 +274,7 @@ export default function TokenSelector({
         <div className="fixed inset-0 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
           <div
             ref={modalRef}
-            className="relative -mt-10 bg-[#222f3e] rounded-3xl p-4 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
+            className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
             style={{ overflow: "hidden" }}
           >
             {/* Background Image and Overlay */}
