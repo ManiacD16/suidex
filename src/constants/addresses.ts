@@ -1,21 +1,20 @@
 export const CONSTANTS = {
   PACKAGE_ID:
-    "0x38ddade24ce343b9a1ebe8973f4ac9dca9a4b769ce3d4e76f7f5d075c92bbe1a",
+    "0x5ec48e0a4b669dbb2ec9159566db1532e78dc0af50c9ff206f0ca48c92235fd9",
   ROUTER_ID:
-    "0xb972f89ceb8f0a3b91728f76a3fa6a96c0b01e12f5285b285193dce3b5e55272",
+    "0x7f06ad54bc675660ce42f2e5f8eb1660e3b8ff87af81ff7c19778b5f63d8ab7b",
   FACTORY_ID:
-    "0x9fea2939c634be54954ea887b1b0f625f6bf5e385ef972957b84312028334578",
+    "0xc69c98858453523e400813d6f32db02ff5ad09b62f74e32ae50a0fd121e42d4c",
   ADMIN_CAP_ID:
-    "0xc2e4eea112a50faa878a2587cddec0e8b79dbe0b09f4ffc5520cbca55e4d80c7",
+    "0x10a48b0862c7e3735d63d8f6e6131134a15caed23f6e859bfd4c976ab5e43a0f",
   UPGRADE_CAP_ID:
-    "0x3b09b1a41815884f4d55d5ec525cf2120da7b8226f448d275b7471b81e91bcee",
+    "0x363386f4bb5923abb74e114d36fe62510100adf69fd98a4b208dd2217708f0b6",
   MODULES: {
     FACTORY: "factory",
     PAIR: "pair",
     ROUTER: "router",
     LIBRARY: "library",
-    MATH_U256: "math_u256",
+    FIXED_POINT_MATH: "fixed_point_math", // Note: this was math_u256 in original
   },
-  // Add these based on token selections
   getPairID: (token0: string, token1: string) => `${token0}_${token1}_pair`,
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import SimpleBar from "simplebar-react";
 import "simplebar/dist/simplebar.min.css";
@@ -18,7 +18,7 @@ interface TokenSelectorProps {
   amount: string;
   onAmountChange: (amount: string) => void;
   readOnly?: boolean;
-  showInput?: boolean; // New prop to control input visibility
+  showInput?: boolean;
 }
 
 interface TokenInfo {
@@ -57,6 +57,26 @@ export default function TokenSelector({
   const [isLoading, setIsLoading] = useState(true);
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        modalRef.current &&
+        !modalRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
 
   const fetchBalance = async (
     tokenId: string,
@@ -253,10 +273,23 @@ export default function TokenSelector({
       {isOpen && (
         <div className="fixed inset-0 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
           <div
-            className="relative bg-[#222f3e] rounded-3xl p-4 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[90vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
-            onClick={(e) => e.stopPropagation()}
+            ref={modalRef}
+            className="relative -mt-10 bg-[#222f3e] rounded-3xl p-4 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
             style={{ overflow: "hidden" }}
           >
+            {/* Background Image and Overlay */}
+            <div
+              className="absolute inset-0 z-0"
+              style={{
+                backgroundImage:
+                  "url(https://cryptologos.cc/logos/sui-sui-logo.png)",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                filter: "blur(5px)",
+                opacity: 1,
+              }}
+            />
             <SimpleBar style={{ maxHeight: "500px" }}>
               <div className="flex justify-between items-center mb-3 sm:mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold text-white">
@@ -311,7 +344,7 @@ export default function TokenSelector({
                         <div className="font-medium text-white text-2xl transition-all duration-300 group-hover:text-[#3a6bc9]">
                           {token.metadata?.name}
                         </div>
-                        <div className="flex justify-between text-sm sm:text-base text-gray-400">
+                        <div className="flex justify-between text-sm sm:text-base text-gray-200">
                           <span>{token.metadata?.symbol}</span>
                           <span>{token.balance}</span>
                         </div>

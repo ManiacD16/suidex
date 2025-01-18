@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from "react";
 import "@mysten/dapp-kit/dist/index.css";
-// import { motion, AnimatePresence } from "framer-motion";
-// import { ArrowDownCircle } from "lucide-react";
-
+import SwapTokenSelector from "./swap-token-selector";
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
@@ -14,6 +12,7 @@ import TokenSelector from "./token-selector";
 import { Transaction } from "@mysten/sui/transactions";
 import { toast } from "react-hot-toast";
 import { CONSTANTS } from "../constants/addresses";
+import { Settings } from "lucide-react";
 
 interface Token {
   id: string; // The token ID is a string
@@ -36,6 +35,8 @@ const formatTokenAmount = (amount: string, decimals: number) => {
 export default function MainCon() {
   const [activeTab, setActiveTab] = useState<string>("exchange");
   const [amount1, setAmount1] = useState<string>("");
+  const [slippage, setSlippage] = useState(0.5);
+  const [showSettings, setShowSettings] = useState(false);
   // const [checkTrigger, setCheckTrigger] = useState(0);
   // const [amount2, setAmount2] = useState<string>("0.0");
   const [priceRate0, setPriceRate0] = useState<string | null>(null);
@@ -419,14 +420,51 @@ export default function MainCon() {
     calculateEstimatedOutput();
   }, [amount0, reserves, pairExists, token0, token1, suiClient]);
 
+  const handleSlippageChange = (value: any) => {
+    setSlippage(value);
+    setShowSettings(false); // Hide the settings panel after selection
+  };
+
+  const renderSettingsPanel = () => (
+    <div className="mb-4 p-4 bg-gray-800/50 rounded-lg">
+      <label className="block text-sm font-medium text-gray-300 mb-2">
+        Slippage Tolerance (%)
+      </label>
+      <div className="flex gap-2">
+        {[0.1, 0.5, 1.0, 5.0].map((value) => (
+          <button
+            key={value}
+            onClick={() => handleSlippageChange(value)}
+            className={`px-3 py-1 rounded ${
+              slippage === value
+                ? "bg-cyan-500 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+          >
+            {value}%
+          </button>
+        ))}
+        <input
+          type="number"
+          value={slippage}
+          onChange={(e) => {
+            const value = parseFloat(e.target.value);
+            if (value >= 0 && value <= 100) setSlippage(value);
+          }}
+          className="w-20 px-2 py-1 border rounded bg-gray-700 text-gray-300 border-gray-600"
+          placeholder="Custom"
+        />
+      </div>
+    </div>
+  );
   const handleSwap = async () => {
     if (!account?.address) {
       toast.error("Please connect your wallet");
       return;
     }
 
-    if (!token0 || !token1 || !amount0 || !pairExists) {
-      toast.error("Please fill in all fields and ensure pair exists");
+    if (!token0 || !token1 || !amount0 || !estimatedOutput || !currentPairId) {
+      toast.error("Please fill in all fields");
       return;
     }
 
@@ -434,85 +472,59 @@ export default function MainCon() {
     const toastId = toast.loading("Processing swap...");
 
     try {
-      // Ensure token0 and token1 are strings before passing them to suiClient.getObject()
-      const token0Id = typeof token0 === "string" ? token0 : token0?.id; // Extract id if it's a Token
-      const token1Id = typeof token1 === "string" ? token1 : token1?.id; // Extract id if it's a Token
-
-      if (!token0Id || !token1Id) {
-        throw new Error("Token IDs are missing or invalid");
-      }
+      const token0Id = typeof token0 === "string" ? token0 : token0.id;
+      const token1Id = typeof token1 === "string" ? token1 : token1.id;
 
       const [token0Obj, token1Obj] = await Promise.all([
         suiClient.getObject({ id: token0Id, options: { showType: true } }),
         suiClient.getObject({ id: token1Id, options: { showType: true } }),
       ]);
 
-      // Ensure token0Obj.data and token1Obj.data are valid and not null/undefined
       if (!token0Obj?.data || !token1Obj?.data) {
         throw new Error("Failed to retrieve token data");
       }
 
       const getBaseType = (coinType: string | null | undefined): string => {
-        if (!coinType) {
-          throw new Error("Coin type is undefined or null");
-        }
+        if (!coinType) throw new Error("Coin type is undefined or null");
         const match = coinType.match(/<(.+)>/);
         return match ? match[1] : coinType;
       };
 
       const baseType0 = getBaseType(token0Obj.data.type);
       const baseType1 = getBaseType(token1Obj.data.type);
-      console.log("Basetype0", baseType0);
-      console.log("Basetype1", baseType1);
 
-      // Retrieve the decimals for each token (assuming this is part of the token's metadata)
-      const getTokenDecimals = async (tokenObj: any): Promise<number> => {
-        return tokenObj?.data?.decimals || 9; // Defaulting to 9 decimals if not found
-      };
+      // Get token decimals
+      const decimals0 = token0.decimals;
+      const decimals1 = token1.decimals;
 
-      const decimals0 = await getTokenDecimals(token0Obj);
-      const decimals1 = await getTokenDecimals(token1Obj);
-
-      // Adjust for the dynamic decimal precision of each token
-      const amount0Value = Math.floor(
-        parseFloat(amount0) * Math.pow(10, decimals0)
+      // Calculate amounts with slippage
+      const amountInValue = BigInt(
+        Math.floor(parseFloat(amount0) * Math.pow(10, decimals0))
       );
-      const estimatedOutput = parseFloat(amount1);
-      const minimumAmountOut = Math.floor(
-        estimatedOutput * 0.95 * Math.pow(10, decimals1)
+      const minAmountOut = BigInt(
+        Math.floor(
+          estimatedOutput * (1 - slippage / 100) * Math.pow(10, decimals1)
+        )
       );
 
-      // Get available coins for the input token
       const coins = await suiClient.getCoins({
         owner: account.address,
         coinType: baseType0,
       });
 
-      // Find a coin with sufficient balance
       const coinToUse = coins.data.find(
-        (coin) => BigInt(coin.balance) >= BigInt(amount0Value)
+        (coin) => BigInt(coin.balance) >= amountInValue
       );
+      if (!coinToUse) throw new Error("Insufficient balance");
 
-      if (!coinToUse) {
-        throw new Error("Insufficient balance");
-      }
-
-      // Create the swap transaction
       const swapTx = new Transaction();
-
-      // Split the input coin
       const [splitCoin] = swapTx.splitCoins(
         swapTx.object(coinToUse.coinObjectId),
-        [swapTx.pure.u64(amount0Value)]
+        [swapTx.pure.u64(amountInValue.toString())]
       );
 
-      // Set deadline 20 minutes from now
-      const deadline = Math.floor(Date.now() + 1200000);
-      if (!currentPairId) {
-        throw new Error("Current pair ID is null");
-      }
+      const deadline = Math.floor(Date.now() + 1200000); // 20 minutes
 
-      // Add the swap call to the transaction
       swapTx.moveCall({
         target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
         typeArguments: [baseType0, baseType1],
@@ -521,19 +533,17 @@ export default function MainCon() {
           swapTx.object(CONSTANTS.FACTORY_ID),
           swapTx.object(currentPairId),
           splitCoin,
-          swapTx.pure.u128(minimumAmountOut),
+          swapTx.pure.u256(minAmountOut.toString()),
           swapTx.pure.u64(deadline),
         ],
       });
 
-      // Execute the transaction
       await signAndExecute(
         { transaction: swapTx },
         {
           onSuccess: (result) => {
             console.log("Swap successful:", result);
             toast.success("Swap completed successfully!", { id: toastId });
-            // Reset input amounts
             setAmount0("");
             setAmount1("");
           },
@@ -628,6 +638,7 @@ export default function MainCon() {
     const toastId = toast.loading("Creating new pair...");
 
     try {
+      // Get token objects
       const token0Id = typeof token0 === "string" ? token0 : token0.id;
       const token1Id = typeof token1 === "string" ? token1 : token1.id;
 
@@ -640,6 +651,7 @@ export default function MainCon() {
         throw new Error("Invalid token types");
       }
 
+      // Get base types
       const getBaseType = (coinType: string) => {
         const match = coinType.match(/<(.+)>/);
         return match ? match[1] : coinType;
@@ -647,6 +659,8 @@ export default function MainCon() {
 
       const baseType0 = getBaseType(token0Obj.data.type);
       const baseType1 = getBaseType(token1Obj.data.type);
+
+      // Sort token types
       const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
 
       // Create the pair transaction
@@ -658,23 +672,16 @@ export default function MainCon() {
           tx.object(CONSTANTS.FACTORY_ID),
           tx.pure.string(sortedType0.split("::").pop() || ""),
           tx.pure.string(sortedType1.split("::").pop() || ""),
-          tx.pure.u64(1000),
         ],
         typeArguments: [sortedType0, sortedType1],
       });
 
-      // Execute and wait for transaction confirmation
-      const createResult = await signAndExecute(
+      // Execute the transaction
+      await signAndExecute(
         { transaction: tx },
         {
-          onSuccess: (result) => {
-            console.log("Transaction successful:", result);
-            // Only show success message after blockchain confirmation
-            toast.success("Pair creation transaction confirmed!", {
-              id: toastId,
-            });
-
-            // Trigger refresh after confirmation
+          onSuccess: () => {
+            toast.success("Pair creation successful!", { id: toastId });
             setTimeout(() => {
               window.location.reload();
             }, 1500);
@@ -683,16 +690,13 @@ export default function MainCon() {
             if (error.message.includes("308")) {
               toast.error("This pair already exists", { id: toastId });
             } else {
-              toast.error(`Transaction failed: ${error.message}`, {
+              toast.error(`Failed to create pair: ${error.message}`, {
                 id: toastId,
               });
             }
-            throw error;
           },
         }
       );
-
-      return createResult;
     } catch (error: any) {
       console.error("Pair creation failed:", error);
       let errorMessage = error.message || "Unknown error";
@@ -700,9 +704,7 @@ export default function MainCon() {
       if (errorMessage.includes("308")) {
         errorMessage = "Trading pair already exists";
       }
-
-      toast.error("Failed to create pair: " + errorMessage, { id: toastId });
-      throw error;
+      toast.error(errorMessage, { id: toastId });
     } finally {
       setIsLoading(false);
     }
@@ -723,7 +725,7 @@ export default function MainCon() {
     const toastId = toast.loading("Adding liquidity...");
 
     try {
-      // Ensure token0 and token1 are strings before passing them to suiClient.getObject()
+      // Get token IDs correctly depending on whether token0/token1 are strings or Token objects
       const token0Id = typeof token0 === "string" ? token0 : token0?.id;
       const token1Id = typeof token1 === "string" ? token1 : token1?.id;
 
@@ -753,7 +755,7 @@ export default function MainCon() {
 
       const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
 
-      // Get token decimals using the same approach as handleSwap
+      // Get token decimals
       const getTokenDecimals = (tokenObj: any): number => {
         if (
           tokenObj?.data?.content &&
@@ -817,18 +819,16 @@ export default function MainCon() {
           addLiquidityTx.object(currentPairId),
           splitCoin0,
           splitCoin1,
-          addLiquidityTx.pure.u128(amount0Value),
-          addLiquidityTx.pure.u128(amount1Value),
-          addLiquidityTx.pure.u128(minAmount0),
-          addLiquidityTx.pure.u128(minAmount1),
+          addLiquidityTx.pure.u256(amount0Value.toString()),
+          addLiquidityTx.pure.u256(amount1Value.toString()),
+          addLiquidityTx.pure.u256(minAmount0.toString()),
+          addLiquidityTx.pure.u256(minAmount1.toString()),
           addLiquidityTx.pure.string(sortedType0.split("::").pop() || ""),
           addLiquidityTx.pure.string(sortedType1.split("::").pop() || ""),
           addLiquidityTx.pure.u64(deadline),
         ],
         typeArguments: [sortedType0, sortedType1],
       });
-
-      // In your handleAddLiquidity function, modify the onSuccess callback:
 
       await signAndExecute(
         { transaction: addLiquidityTx },
@@ -884,6 +884,7 @@ export default function MainCon() {
             toast.success("Liquidity added successfully!", { id: toastId });
           },
           onError: (error) => {
+            console.error("Transaction error:", error);
             throw error;
           },
         }
@@ -897,7 +898,6 @@ export default function MainCon() {
       }
 
       toast.error("Failed to add liquidity: " + errorMessage, { id: toastId });
-      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -923,6 +923,15 @@ export default function MainCon() {
     const timer = setTimeout(() => setIsInitialLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleSwapTokens = () => {
+    const tempToken = token0;
+    const tempAmount = amount0;
+    handleToken0Change(token1);
+    setAmount0(amount1);
+    handleToken1Change(tempToken);
+    setAmount1(tempAmount);
+  };
 
   return (
     <>
@@ -993,12 +1002,23 @@ export default function MainCon() {
         ) : activeTab === "exchange" ? (
           <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700 p-4">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-sm text-gray-400">Swap</span>
-              <div className="text-sm text-gray-500 bg-gray-800/50 px-3 py-1 rounded-full">
-                Slippage: 5%
+              <span className="text-lg text-gray-300 font-semibold">Swap</span>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="p-2 rounded-lg hover:bg-gray-700/50"
+                >
+                  <Settings className="w-5 h-5 text-gray-400" />
+                </button>
+                <div className="text-sm text-gray-300 bg-gray-800/50 px-3 py-1 rounded-full">
+                  Slippage:{" "}
+                  <span className="font-semibold text-cyan-500">
+                    {slippage}%
+                  </span>
+                </div>
               </div>
             </div>
-
+            {showSettings && renderSettingsPanel()}
             {/* Pair Info Card */}
             {token0 && token1 && (
               <div
@@ -1060,68 +1080,31 @@ export default function MainCon() {
             {/* Token Input Section */}
             <div className="space-y-3">
               <div className="space-y-2">
-                <div className="flex justify-between text-sm mb-2">
+                {/* <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-400">You Pay</span>
                   <span className="text-gray-400">Balance: {balance0}</span>
-                </div>
-                <TokenSelector
-                  label="Token 0"
-                  onSelect={handleToken0Change}
-                  amount={amount0}
-                  onAmountChange={setAmount0}
-                  showInput={pairExists} // Only show input if pair exists
+                </div> */}
+                <SwapTokenSelector
+                  token0={token0}
+                  token1={token1}
+                  amount0={amount0}
+                  amount1={amount1}
+                  onSwapTokens={handleSwapTokens}
+                  onAmount0Change={setAmount0}
+                  onAmount1Change={setAmount1}
+                  onToken0Select={handleToken0Change}
+                  onToken1Select={handleToken1Change}
+                  showInput={pairExists}
                 />
-              </div>
-
-              {/* Swap Direction Button */}
-              {/* <div className="relative flex justify-center">
-                <button
-                  onClick={() => {
-                    const tempToken = token0;
-                    const tempAmount = amount0;
-                    setToken0(token1);
-                    setAmount0(amount1);
-                    setToken1(tempToken);
-                    setAmount1(tempAmount);
-                  }}
-                  className="p-3 rounded-full border-2 border-gray-400 hover:border-cyan-600 bg-gray-700 hover:bg-gray-600 transition-all duration-300 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                >
-                  <svg
-                    className="w-6 h-6 text-cyan-300 transform transition-transform duration-300 hover:rotate-180"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                    />
-                  </svg>
-                </button>
-              </div> */}
-
-              {/* Token Output Section */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-400">You Receive</span>
-                  <span className="text-gray-400">Balance: {balance1}</span>
-                </div>
-                <TokenSelector
-                  label="Token 1"
-                  onSelect={handleToken1Change}
-                  amount={estimatedOutput ? estimatedOutput.toFixed(3) : "0.0"}
-                  onAmountChange={setAmount1}
-                  showInput={pairExists} // Only show input if pair exists
-                />
-
                 {estimatedOutput && (
-                  <div className="mt-2 text-xs flex justify-between text-gray-500">
-                    <span>Minimum received after slippage</span>
-                    <span className="font-medium">
-                      {(estimatedOutput * 0.95).toFixed(6)}
-                    </span>
+                  <div className="mt-2 p-3 bg-gray-800/30 rounded-lg space-y-2">
+                    <div className="flex justify-between text-sm text-gray-400">
+                      <span>Minimum received after slippage:</span>
+                      <span>
+                        {(estimatedOutput * (1 - slippage / 100)).toFixed(6)}{" "}
+                        {token1?.symbol}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1188,7 +1171,9 @@ export default function MainCon() {
           <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700">
             <div className="p-4">
               <div className="flex justify-between items-center mb-4">
-                <span className="text-sm text-gray-400">Add Liquidity</span>
+                <span className="text-lg text-gray-300 font-semibold">
+                  Add Liquidity
+                </span>
                 {token0 && token1 && (
                   <div
                     className={`px-3 py-2 rounded-lg text-sm ${
