@@ -81,9 +81,50 @@ export default function MainCon() {
   // Reset when changing tabs
   const handleTabChange = (tab: string) => {
     resetAllValues();
+    setSuggestedLiquidityAmount(null);
     setActiveTab(tab);
   };
 
+  const [suggestedLiquidityAmount, setSuggestedLiquidityAmount] = useState<
+    string | null
+  >(null);
+  // Calculate the suggested liquidity amount based on reserves ratio
+  const calculateSuggestedLiquidityAmount = (
+    amount: string,
+    token0: Token | null,
+    token1: Token | null
+  ): string | null => {
+    if (
+      !pairExists ||
+      !amount ||
+      !token0 ||
+      !token1 ||
+      reserves.reserve0 === "0" ||
+      reserves.reserve1 === "0"
+    ) {
+      return null;
+    }
+
+    try {
+      const inputAmount = Number(amount);
+      const suggestedAmount =
+        inputAmount * (Number(reserves.reserve0) / Number(reserves.reserve1));
+
+      console.log("Calculation details:", {
+        inputAmount,
+        reserve0: reserves.reserve0,
+        reserve1: reserves.reserve1,
+        ratio: Number(reserves.reserve0) / Number(reserves.reserve1),
+        suggestedAmount,
+      });
+
+      // Add toFixed(3) here
+      return suggestedAmount.toFixed(3);
+    } catch (error) {
+      console.error("Error calculating suggested amount:", error);
+      return null;
+    }
+  };
   // Reset relevant values when changing tokens
   const handleToken0Change = (newToken: Token | null) => {
     setAmount0("");
@@ -185,7 +226,6 @@ export default function MainCon() {
         setPriceRate1(null);
         return;
       }
-
       // Calculate price rates (1 token0 = X token1 and vice versa)
       const rate0 = (
         Number(reserves.reserve1) / Number(reserves.reserve0)
@@ -193,14 +233,11 @@ export default function MainCon() {
       const rate1 = (
         Number(reserves.reserve0) / Number(reserves.reserve1)
       ).toFixed(3);
-
       setPriceRate0(rate0);
       setPriceRate1(rate1);
     };
-
     calculateRates();
   }, [reserves]);
-
   useEffect(() => {
     const suggestAmount = () => {
       if (amount0 && priceRate0 && reserves.reserve0 !== "0") {
@@ -335,9 +372,36 @@ export default function MainCon() {
     return a.length < b.length;
   };
 
+  // Add this new useEffect
+  useEffect(() => {
+    const updateLiquidityAmounts = () => {
+      if (
+        activeTab === "liquidity" &&
+        pairExists &&
+        amount0 &&
+        token0 &&
+        token1
+      ) {
+        const suggestedAmount = calculateSuggestedLiquidityAmount(
+          amount0,
+          token0,
+          token1
+        );
+        if (suggestedAmount) {
+          setSuggestedLiquidityAmount(suggestedAmount);
+          setAmount1(suggestedAmount);
+        }
+      }
+    };
+
+    updateLiquidityAmounts();
+  }, [activeTab, pairExists, amount0, token0, token1]);
+
   useEffect(() => {
     const calculateEstimatedOutput = async () => {
+      // Only calculate for swap tab
       if (
+        activeTab !== "exchange" ||
         !pairExists ||
         !amount0 ||
         !reserves.reserve0 ||
@@ -350,80 +414,46 @@ export default function MainCon() {
       }
 
       try {
-        // Extract the IDs of token0 and token1
-        const token0Id = token0.id;
-        const token1Id = token1.id;
+        const BASIS_POINTS = 10000n;
+        const TOTAL_FEE = 30n;
 
-        // Get token types and decimals
-        const [token0Obj, token1Obj] = await Promise.all([
-          suiClient.getObject({ id: token0Id, options: { showType: true } }),
-          suiClient.getObject({ id: token1Id, options: { showType: true } }),
-        ]);
+        const scaledAmount0 = BigInt(
+          Math.floor(parseFloat(amount0) * Math.pow(10, token0.decimals))
+        );
+        const reserveIn = BigInt(reserves.reserve0);
+        const reserveOut = BigInt(reserves.reserve1);
 
-        if (!token0Obj?.data || !token1Obj?.data) {
-          throw new Error("Failed to retrieve token data");
+        if (scaledAmount0 >= reserveIn) {
+          throw new Error("Amount exceeds available liquidity");
         }
 
-        const getBaseType = (coinType: string | null | undefined): string => {
-          if (!coinType) {
-            throw new Error("Coin type is undefined or null");
-          }
-          const match = coinType.match(/<(.+)>/);
-          return match ? match[1] : coinType;
-        };
-
-        const baseType0 = getBaseType(token0Obj.data.type);
-        const baseType1 = getBaseType(token1Obj.data.type);
-
-        // Retrieve decimals for token0 and token1
-        const getTokenDecimals = (tokenObj: any): number => {
-          return tokenObj?.data?.decimals || 9; // Default to 9 decimals if not found
-        };
-
-        const decimals0 = getTokenDecimals(token0Obj);
-        const decimals1 = getTokenDecimals(token1Obj);
-
-        // Check if the input token is the first token in the sorted pair
-        const [firstSortedType] = sortTokens(baseType0, baseType1);
-        const isToken0First = baseType0 === firstSortedType;
-
-        // Calculate amount0 in the smallest unit (based on token0 decimals)
-        const amount0Value = Math.floor(
-          parseFloat(amount0) * Math.pow(10, decimals0)
-        );
-
-        // Use reserves in the correct order based on token positions
-        const reserveIn = BigInt(
-          isToken0First ? reserves.reserve0 : reserves.reserve1
-        );
-        const reserveOut = BigInt(
-          isToken0First ? reserves.reserve1 : reserves.reserve0
-        );
-
-        // Calculate swap output using the formula:
-        // amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
-        const amountInWithFee = BigInt(amount0Value) * 997n;
+        const amountInWithFee = scaledAmount0 * (BASIS_POINTS - TOTAL_FEE);
         const numerator = amountInWithFee * reserveOut;
-        const denominator = reserveIn * 1000n + amountInWithFee;
+        const denominator = reserveIn * BASIS_POINTS;
         const amountOut = numerator / denominator;
 
-        // Set estimated output with proper decimal formatting
-        setEstimatedOutput(Number(amountOut) / Math.pow(10, decimals1)); // Adjust to token1's decimals
-        setAmount1((Number(amountOut) / Math.pow(10, decimals1)).toFixed(3)); // Limit to 6 decimals
+        const scaledOutput = Number(amountOut) / Math.pow(10, token1.decimals);
+        setEstimatedOutput(scaledOutput);
+
+        // Only set amount1 for swap
+        if (activeTab === "exchange") {
+          setAmount1(scaledOutput.toFixed(3));
+        }
       } catch (error) {
         console.error("Error calculating output:", error);
         setEstimatedOutput(null);
-        setAmount1("0.0");
+        if (activeTab === "exchange") {
+          setAmount1("0.0");
+        }
       }
     };
 
     calculateEstimatedOutput();
-  }, [amount0, reserves, pairExists, token0, token1, suiClient]);
-
-  const handleSlippageChange = (value: any) => {
-    setSlippage(value);
-    setShowSettings(false); // Hide the settings panel after selection
-  };
+  }, [amount0, reserves, pairExists, token0, token1, activeTab]);
+  // const handleSlippageChange = (value: any) => {
+  //   setSlippage(value);
+  //   setShowSettings(false); // Hide the settings panel after selection
+  // };
 
   const renderSettingsPanel = () => (
     <div className="mb-4 p-4 bg-gray-800/50 rounded-lg">
@@ -434,9 +464,12 @@ export default function MainCon() {
         {[0.1, 0.5, 1.0, 5.0].map((value) => (
           <button
             key={value}
-            onClick={() => handleSlippageChange(value)}
+            onClick={() => {
+              setSlippage(value);
+              setShowSettings(false);
+            }}
             className={`px-3 py-1 rounded ${
-              slippage === value
+              Number(slippage) === value
                 ? "bg-cyan-500 text-white"
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
             }`}
@@ -445,11 +478,18 @@ export default function MainCon() {
           </button>
         ))}
         <input
-          type="number"
-          value={slippage}
+          type="text"
+          value={slippage === 0 ? "" : slippage}
           onChange={(e) => {
-            const value = parseFloat(e.target.value);
-            if (value >= 0 && value <= 100) setSlippage(value);
+            const value = e.target.value;
+            if (value === "") {
+              setSlippage(0);
+            } else {
+              const parsed = parseFloat(value);
+              if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+                setSlippage(parsed);
+              }
+            }
           }}
           className="w-20 px-2 py-1 border rounded bg-gray-700 text-gray-300 border-gray-600"
           placeholder="Custom"
@@ -472,20 +512,40 @@ export default function MainCon() {
     const toastId = toast.loading("Processing swap...");
 
     try {
-      const token0Id = typeof token0 === "string" ? token0 : token0.id;
-      const token1Id = typeof token1 === "string" ? token1 : token1.id;
+      // === STEP 1: Initial Parameters Logging ===
+      console.log("=== INITIAL PARAMETERS ===");
+      console.log({
+        rawAmountIn: amount0,
+        rawAmountOut: amount1,
+        tokenInInfo: {
+          symbol: token0.symbol,
+          decimals: token0.decimals,
+          type: token0.id,
+        },
+        tokenOutInfo: {
+          symbol: token1.symbol,
+          decimals: token1.decimals,
+          type: token1.id,
+        },
+        reserves: {
+          reserve0: reserves.reserve0,
+          reserve1: reserves.reserve1,
+          timestamp: reserves.timestamp,
+        },
+        slippage,
+      });
 
+      // === STEP 2: Get Token Types ===
       const [token0Obj, token1Obj] = await Promise.all([
-        suiClient.getObject({ id: token0Id, options: { showType: true } }),
-        suiClient.getObject({ id: token1Id, options: { showType: true } }),
+        suiClient.getObject({ id: token0.id, options: { showType: true } }),
+        suiClient.getObject({ id: token1.id, options: { showType: true } }),
       ]);
 
-      if (!token0Obj?.data || !token1Obj?.data) {
-        throw new Error("Failed to retrieve token data");
+      if (!token0Obj?.data?.type || !token1Obj?.data?.type) {
+        throw new Error("Failed to retrieve token types");
       }
 
-      const getBaseType = (coinType: string | null | undefined): string => {
-        if (!coinType) throw new Error("Coin type is undefined or null");
+      const getBaseType = (coinType: string): string => {
         const match = coinType.match(/<(.+)>/);
         return match ? match[1] : coinType;
       };
@@ -493,41 +553,82 @@ export default function MainCon() {
       const baseType0 = getBaseType(token0Obj.data.type);
       const baseType1 = getBaseType(token1Obj.data.type);
 
-      // Get token decimals
-      const decimals0 = token0.decimals;
-      const decimals1 = token1.decimals;
+      // === STEP 3: Determine Token Order and Direction ===
+      // Get the sorted token types to determine which swap function to use
+      const [firstSortedType, secondSortedType] = sortTokens(
+        baseType0,
+        baseType1
+      );
+      const isToken0First = baseType0 === firstSortedType;
 
-      // Calculate amounts with slippage
-      const amountInValue = BigInt(
-        Math.floor(parseFloat(amount0) * Math.pow(10, decimals0))
+      // Choose the appropriate swap function based on token order
+      const swapFunction = isToken0First
+        ? "swap_exact_tokens0_for_tokens1"
+        : "swap_exact_tokens1_for_tokens0";
+
+      console.log("=== TOKEN ORDER ===", {
+        baseType0,
+        baseType1,
+        firstSortedType,
+        secondSortedType,
+        isToken0First,
+        swapFunction,
+      });
+
+      // === STEP 4: Calculate Amounts ===
+      const scaledAmountIn = BigInt(
+        Math.floor(parseFloat(amount0) * Math.pow(10, token0.decimals))
       );
       const minAmountOut = BigInt(
         Math.floor(
-          estimatedOutput * (1 - slippage / 100) * Math.pow(10, decimals1)
+          estimatedOutput * (1 - slippage / 100) * Math.pow(10, token1.decimals)
         )
       );
 
+      console.log("=== AMOUNTS ===", {
+        scaledAmountIn: scaledAmountIn.toString(),
+        minAmountOut: minAmountOut.toString(),
+        slippage: slippage + "%",
+      });
+
+      // === STEP 5: Validate Balance and Get Coins ===
       const coins = await suiClient.getCoins({
         owner: account.address,
         coinType: baseType0,
       });
 
       const coinToUse = coins.data.find(
-        (coin) => BigInt(coin.balance) >= amountInValue
+        (coin) => BigInt(coin.balance) >= scaledAmountIn
       );
-      if (!coinToUse) throw new Error("Insufficient balance");
+      if (!coinToUse) {
+        throw new Error("Insufficient balance");
+      }
 
+      // === STEP 6: Setup Transaction ===
+      const deadline = Math.floor(Date.now() + 1200000); // 20 minutes
       const swapTx = new Transaction();
       const [splitCoin] = swapTx.splitCoins(
         swapTx.object(coinToUse.coinObjectId),
-        [swapTx.pure.u64(amountInValue.toString())]
+        [swapTx.pure.u64(scaledAmountIn.toString())]
       );
 
-      const deadline = Math.floor(Date.now() + 1200000); // 20 minutes
+      console.log("=== TRANSACTION SETUP ===", {
+        swapFunction,
+        typeArguments: [firstSortedType, secondSortedType], // Use sorted types
+        arguments: {
+          routerId: CONSTANTS.ROUTER_ID,
+          factoryId: CONSTANTS.FACTORY_ID,
+          pairId: currentPairId,
+          amount: scaledAmountIn.toString(),
+          minAmountOut: minAmountOut.toString(),
+          deadline,
+        },
+      });
 
+      // === STEP 7: Execute Transaction ===
       swapTx.moveCall({
-        target: `${CONSTANTS.PACKAGE_ID}::router::swap_exact_tokens_for_tokens`,
-        typeArguments: [baseType0, baseType1],
+        target: `${CONSTANTS.PACKAGE_ID}::router::${swapFunction}`,
+        typeArguments: [firstSortedType, secondSortedType], // Use sorted types in correct order
         arguments: [
           swapTx.object(CONSTANTS.ROUTER_ID),
           swapTx.object(CONSTANTS.FACTORY_ID),
@@ -538,25 +639,36 @@ export default function MainCon() {
         ],
       });
 
+      console.log("=== EXECUTING TRANSACTION ===");
+
       await signAndExecute(
         { transaction: swapTx },
         {
           onSuccess: (result) => {
-            console.log("Swap successful:", result);
+            console.log("=== TRANSACTION SUCCEEDED ===", result);
             toast.success("Swap completed successfully!", { id: toastId });
             setAmount0("");
             setAmount1("");
           },
           onError: (error) => {
-            console.error("Swap failed:", error);
+            console.log("=== TRANSACTION FAILED ===", error);
             throw error;
           },
         }
       );
     } catch (error: any) {
-      console.error("Swap failed:", error);
-      toast.error(`Swap failed: ${error.message}`, { id: toastId });
+      console.error("=== SWAP ERROR ===", error);
+      const errorMessage = error.message || "Unknown error";
+      // Provide user-friendly error messages
+      const userMessage = errorMessage.includes("Insufficient balance")
+        ? "Insufficient balance for swap"
+        : errorMessage.includes("slippage")
+        ? "Price moved too much, try increasing slippage tolerance"
+        : `Swap failed: ${errorMessage}`;
+
+      toast.error(userMessage, { id: toastId });
     } finally {
+      console.log("=== SWAP COMPLETED ===");
       setIsSwapLoading(false);
     }
   };
@@ -1201,28 +1313,31 @@ export default function MainCon() {
                         0,
                         8
                       )}...`}</div>
-                      <div className="text-sm text-gray-400 mt-1">
-                        {" "}
-                        {`Reserves: ${
-                          token0
-                            ? (
-                                Number(reserves.reserve0) /
-                                Math.pow(10, token0.decimals)
-                              ).toFixed(3)
-                            : "0"
-                        } - ${
-                          token1
-                            ? (
-                                Number(reserves.reserve1) /
-                                Math.pow(10, token1.decimals)
-                              ).toFixed(3)
-                            : "0"
-                        }`}
+                      <div className="text-cyan-500 font-medium mt-1">
+                        {token0.symbol}:{" "}
+                        {(
+                          Number(reserves.reserve0) /
+                          Math.pow(10, token0.decimals)
+                        ).toFixed(3)}
+                        <br />
+                        {token1.symbol}:{" "}
+                        {(
+                          Number(reserves.reserve1) /
+                          Math.pow(10, token1.decimals)
+                        ).toFixed(3)}
                       </div>
                       {priceRate0 && priceRate1 && (
                         <div className="mt-2 text-sm text-gray-400">
-                          <div>{`1 Token0 = ${priceRate0} Token1`}</div>
-                          <div>{`1 Token1 = ${priceRate1} Token0`}</div>
+                          <div>{`1 ${
+                            token0?.symbol || "Token0"
+                          } = ${priceRate0} ${
+                            token1?.symbol || "Token1"
+                          }`}</div>
+                          <div>{`1 ${
+                            token1?.symbol || "Token1"
+                          } = ${priceRate1} ${
+                            token0?.symbol || "Token0"
+                          }`}</div>
                         </div>
                       )}
                     </>
@@ -1250,14 +1365,29 @@ export default function MainCon() {
                     amount={amount0}
                     onAmountChange={(value) => {
                       setAmount0(value);
-                      if (value && priceRate0) {
-                        const suggested = (
-                          Number(value) * Number(priceRate0)
-                        ).toFixed(3);
-                        setAmount1(suggested);
+                      if (activeTab === "exchange") {
+                        // For exchange/swap, use price rate
+                        if (value && priceRate0) {
+                          const suggested = (
+                            Number(value) * Number(priceRate0)
+                          ).toFixed(3);
+                          setAmount1(suggested);
+                        }
+                      } else {
+                        // For liquidity, calculate using the suggested liquidity amount
+                        const suggestedAmount =
+                          calculateSuggestedLiquidityAmount(
+                            value,
+                            token0,
+                            token1
+                          );
+                        if (suggestedAmount) {
+                          setAmount1(suggestedAmount);
+                          setSuggestedLiquidityAmount(suggestedAmount);
+                        }
                       }
                     }}
-                    showInput={pairExists} // Only show input if pair exists
+                    showInput={pairExists}
                   />
                 </div>
 
@@ -1278,7 +1408,31 @@ export default function MainCon() {
                     showInput={pairExists} // Only show input if pair exists
                   />
                 </div>
-
+                {/* Display suggested amount and warning in liquidity mode */}
+                {activeTab === "liquidity" && pairExists && amount0 && (
+                  <div className="mt-2">
+                    {suggestedLiquidityAmount && (
+                      <div className="px-3 py-2 bg-gray-800/30 rounded-lg text-xs">
+                        <span className="text-gray-400">
+                          Suggested amount based on pool ratio:{" "}
+                        </span>
+                        <span className="text-cyan-500 font-medium">
+                          {suggestedLiquidityAmount} {token1?.symbol}
+                        </span>
+                      </div>
+                    )}
+                    {suggestedLiquidityAmount &&
+                      amount1 &&
+                      Number(amount1) !== Number(suggestedLiquidityAmount) && (
+                        <div className="mt-2 px-3 py-2 bg-yellow-500/10 rounded-lg">
+                          <div className="text-xs text-yellow-500">
+                            ⚠️ Current amount differs from the suggested amount.
+                            This may result in sub-optimal liquidity provision.
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                )}
                 {/* Add Liquidity Button */}
                 <button
                   onClick={pairExists ? handleAddLiquidity : handleCreatePair}
