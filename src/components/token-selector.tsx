@@ -277,7 +277,7 @@ export default function TokenSelector({
             className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
             style={{ overflow: "hidden" }}
           >
-            {/* Background Image and Overlay */}
+            {/* Background Image and Overlay
             <div
               className="absolute inset-0 z-0"
               style={{
@@ -289,7 +289,7 @@ export default function TokenSelector({
                 filter: "blur(5px)",
                 opacity: 1,
               }}
-            />
+            /> */}
             <SimpleBar style={{ maxHeight: "500px" }}>
               <div className="flex justify-between items-center mb-3 sm:mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold text-white">

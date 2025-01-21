@@ -12,7 +12,7 @@ import TokenSelector from "./token-selector";
 import { Transaction } from "@mysten/sui/transactions";
 import { toast } from "react-hot-toast";
 import { CONSTANTS } from "../constants/addresses";
-import { Settings } from "lucide-react";
+import { Settings, AlertCircle } from "lucide-react";
 
 interface Token {
   id: string; // The token ID is a string
@@ -397,9 +397,10 @@ export default function MainCon() {
     updateLiquidityAmounts();
   }, [activeTab, pairExists, amount0, token0, token1]);
 
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     const calculateEstimatedOutput = async () => {
-      // Only calculate for swap tab
       if (
         activeTab !== "exchange" ||
         !pairExists ||
@@ -412,35 +413,30 @@ export default function MainCon() {
         setEstimatedOutput(null);
         return;
       }
-
       try {
         const BASIS_POINTS = 10000n;
         const TOTAL_FEE = 30n;
-
         const scaledAmount0 = BigInt(
           Math.floor(parseFloat(amount0) * Math.pow(10, token0.decimals))
         );
         const reserveIn = BigInt(reserves.reserve0);
         const reserveOut = BigInt(reserves.reserve1);
-
         if (scaledAmount0 >= reserveIn) {
           throw new Error("Amount exceeds available liquidity");
         }
-
         const amountInWithFee = scaledAmount0 * (BASIS_POINTS - TOTAL_FEE);
         const numerator = amountInWithFee * reserveOut;
         const denominator = reserveIn * BASIS_POINTS;
         const amountOut = numerator / denominator;
-
         const scaledOutput = Number(amountOut) / Math.pow(10, token1.decimals);
         setEstimatedOutput(scaledOutput);
-
-        // Only set amount1 for swap
+        setError(null);
         if (activeTab === "exchange") {
           setAmount1(scaledOutput.toFixed(3));
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error calculating output:", error);
+        setError(error.message);
         setEstimatedOutput(null);
         if (activeTab === "exchange") {
           setAmount1("0.0");
@@ -449,7 +445,7 @@ export default function MainCon() {
     };
 
     calculateEstimatedOutput();
-  }, [amount0, reserves, pairExists, token0, token1, activeTab]);
+  }, [amount0, reserves, token0, token1, activeTab, pairExists]);
   // const handleSlippageChange = (value: any) => {
   //   setSlippage(value);
   //   setShowSettings(false); // Hide the settings panel after selection
@@ -1208,6 +1204,12 @@ export default function MainCon() {
                   onToken1Select={handleToken1Change}
                   showInput={pairExists}
                 />
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-red-500" />
+                    <span className="text-sm text-red-500">{error}</span>
+                  </div>
+                )}
                 {estimatedOutput && (
                   <div className="mt-2 p-3 bg-gray-800/30 rounded-lg space-y-2">
                     <div className="flex justify-between text-sm text-gray-400">
@@ -1223,7 +1225,9 @@ export default function MainCon() {
 
               {/* Swap Button */}
               <button
-                onClick={pairExists ? handleSwap : handleCreatePair} // Use handleAddLiquidity when pair doesn't exist
+                onClick={
+                  pairExists ? handleSwap : () => handleTabChange("liquidity")
+                } // Use handleAddLiquidity when pair doesn't exist
                 disabled={
                   isSwapLoading ||
                   !token0 ||
@@ -1271,7 +1275,7 @@ export default function MainCon() {
                         d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                       />
                     </svg>
-                    Create Trading Pair
+                    Create Pair First
                   </div>
                 ) : (
                   "Swap Tokens"

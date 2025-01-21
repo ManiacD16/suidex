@@ -294,7 +294,7 @@ const TokenInput: React.FC<TokenInputProps> = ({
               style={{ overflow: "hidden" }}
             >
               {/* Background Image and Overlay */}
-              <div
+              {/* <div
                 className="absolute inset-0 z-0"
                 style={{
                   backgroundImage:
@@ -305,7 +305,7 @@ const TokenInput: React.FC<TokenInputProps> = ({
                   filter: "blur(5px)",
                   opacity: 1,
                 }}
-              />
+              /> */}
               <SimpleBar style={{ maxHeight: "500px" }}>
                 <div className="flex justify-between items-center mb-3 sm:mb-4">
                   <h3 className="text-lg sm:text-xl font-semibold text-white">
