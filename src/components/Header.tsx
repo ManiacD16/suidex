@@ -246,19 +246,19 @@ export default function Header() {
           </div>
           {/* Tabs for Swap and Pool */}
           <div
-            className={`hidden md:flex space-x-4 ml-auto ${
+            className={`hidden lg:flex md:hidden space-x-[1rem] ml-auto ${
               isSearchFocused ? "hidden" : "flex"
             }`}
           >
             <button
               onClick={() => navigate("/swap")}
-              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              className="text-gray-200 hover:bg-cyan-500 hover:text-slate-600 hover:font-semibold py-[0.1rem] px-2 hover:border hover:rounded-lg transition-colors duration-200"
             >
               Swap
             </button>
             <button
               onClick={() => navigate("/pool")}
-              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              className="text-gray-200 hover:bg-cyan-500 hover:text-slate-600 hover:font-semibold py-[0.1rem] px-2 hover:border hover:rounded-lg transition-colors duration-200"
             >
               Pool
             </button>
@@ -266,7 +266,7 @@ export default function Header() {
               onClick={() => {
                 window.location.href = "https://suitrumpnew.vercel.app/";
               }}
-              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              className="text-gray-200 hover:bg-cyan-500 hover:text-slate-600 hover:font-semibold py-[0.1rem] px-2 hover:border hover:rounded-lg transition-colors duration-200"
             >
               Earn
             </button>
@@ -274,7 +274,7 @@ export default function Header() {
               onClick={() => {
                 window.location.href = "https://sui-trump.com";
               }}
-              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              className="text-gray-200 hover:bg-cyan-500 hover:text-slate-600 hover:font-semibold py-[0.1rem] px-2 hover:border hover:rounded-lg transition-colors duration-200"
             >
               SuiTrump
             </button>
@@ -282,7 +282,7 @@ export default function Header() {
               onClick={() => {
                 window.location.href = "https://bridge.sui.io/";
               }}
-              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              className="text-gray-200 hover:bg-cyan-500 hover:text-slate-600 hover:font-semibold py-[0.1rem] px-2 hover:border hover:rounded-lg transition-colors duration-200"
             >
               Bridge
             </button>
@@ -290,7 +290,7 @@ export default function Header() {
               onClick={() => {
                 window.location.href = "https://bridge.sui.io/";
               }}
-              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              className="text-gray-200 hover:bg-cyan-500 hover:text-slate-600 hover:font-semibold py-[0.1rem] px-2 hover:border hover:rounded-lg transition-colors duration-200"
             >
               Docs
             </button>
@@ -299,7 +299,7 @@ export default function Header() {
           {/* Mobile Hamburger Button */}
           <button
             onClick={toggleMenu}
-            className="block md:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors duration-200"
+            className="block lg:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors duration-200"
           >
             {isMenuOpen ? (
               <X className="h-5 w-5" />
@@ -318,7 +318,7 @@ export default function Header() {
                   navigate("/swap");
                   setIsMenuOpen(false); // Close menu after navigation
                 }}
-                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+                className="text-gray-200 hover:text-cyan-500 transition-colors  duration-200"
               >
                 Swap
               </button>

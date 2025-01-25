@@ -21,6 +21,29 @@ interface Token {
   decimals: number;
 }
 
+// interface LPEvent {
+//   sender: string;
+//   lp_coin_id: string;
+//   token0_type: string;
+//   token1_type: string;
+//   amount0: string;
+//   amount1: string;
+//   liquidity: string;
+//   total_supply: string;
+// }
+
+interface LPEvent {
+  type: string;
+  sender: string;
+  lpCoinId: string;
+  token0Type: { name: string };
+  token1Type: { name: string };
+  amount0: string;
+  amount1: string;
+  liquidity: string;
+  totalSupply: string;
+  timestamp: string;
+}
 // interface ParsedEventJson {
 //   pair: string;
 //   token0: Token;
@@ -513,24 +536,79 @@ export default function MainCon() {
       setIsLoading(false);
     }
   };
+  const [events, setEvents] = useState<any[]>([]);
 
-  // First, add the processLPEvent function near the top of your component, after the formatTokenAmount function
+  // Update useEffect for event fetching
+  useEffect(() => {
+    const fetchEvents = async () => {
+      if (!account?.address) return;
+
+      try {
+        const recentTxs = await suiClient.queryEvents({
+          query: { MoveEventType: `${CONSTANTS.PACKAGE_ID}::pair::LPMint` },
+          order: "descending",
+          limit: 10,
+        });
+
+        console.log("Raw events:", recentTxs.data[0].parsedJson);
+
+        const processedEvents = recentTxs.data.map((event) => {
+          const parsed = event.parsedJson as any;
+          const processed = {
+            type: event.type,
+            sender: parsed.sender,
+            lpCoinId: parsed.lpCoinId,
+            token0Type: parsed.token0Type,
+            token1Type: parsed.token1Type,
+            amount0: parsed.amount0,
+            amount1: parsed.amount1,
+            liquidity: parsed.liquidity,
+            totalSupply: parsed.totalSupply,
+            timestamp: event.timestampMs,
+          };
+          console.log("Processed event:", processed);
+          // Store events in database
+          // try {
+          //   const response = await fetch("/api/lp-events", {
+          //     method: "POST",
+          //     headers: {
+          //       "Content-Type": "application/json",
+          //     },
+          //     body: JSON.stringify(processedEvents),
+          //   });
+
+          //   if (!response.ok) {
+          //     throw new Error("Failed to store LP events");
+          //   }
+          //   console.log("Successfully stored LP events in database");
+          // } catch (error) {
+          //   console.error("Error storing LP events:", error);
+          // }
+          return processed;
+        });
+
+        setEvents(processedEvents);
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    };
+
+    fetchEvents();
+  }, [account?.address, suiClient]);
+  // Add processLPEvent function inside the MainCon component
   const processLPEvent = async (txDigest: string) => {
     try {
       console.log("Processing LP events for transaction:", txDigest);
-      // Fetch LPMint events for the transaction
-      const mintEvents = await suiClient.queryEvents({
-        query: {
-          MoveEventType: `${CONSTANTS.PACKAGE_ID}::pair::LPMint`,
+
+      const txData = await suiClient.getTransactionBlock({
+        digest: txDigest,
+        options: {
+          showEvents: true,
+          showEffects: true,
         },
-        order: "descending",
-      });
-      console.log("Found events:", {
-        mintEvents: mintEvents.data,
       });
 
-      // Process mint events
-      interface LPMintEvent {
+      type LPEventJson = {
         sender: string;
         lp_coin_id: string;
         token0_type: string;
@@ -539,68 +617,31 @@ export default function MainCon() {
         amount1: string;
         liquidity: string;
         total_supply: string;
-      }
+      };
 
-      const processedMintEvents = mintEvents.data.map((event) => {
-        const parsedEvent = event.parsedJson as LPMintEvent;
-        const processed = {
-          eventType: "mint",
-          timestamp: new Date(Number(event.timestampMs)).toISOString(),
-          txDigest: event.id.txDigest,
-          sender: parsedEvent.sender,
-          lpCoinId: parsedEvent.lp_coin_id,
-          token0Type: parsedEvent.token0_type,
-          token1Type: parsedEvent.token1_type,
-          amount0: parsedEvent.amount0,
-          amount1: parsedEvent.amount1,
-          liquidity: parsedEvent.liquidity,
-          totalSupply: parsedEvent.total_supply,
-        };
+      const lpEvents = txData.events
+        ?.filter((event) => event.type.includes("::pair::LP"))
+        .map((event) => ({
+          type: event.type,
+          sender: (event.parsedJson as LPEventJson).sender,
+          lpCoinId: (event.parsedJson as LPEventJson).lp_coin_id,
+          token0Type: (event.parsedJson as LPEventJson).token0_type,
+          token1Type: (event.parsedJson as LPEventJson).token1_type,
+          amount0: (event.parsedJson as LPEventJson).amount0,
+          amount1: (event.parsedJson as LPEventJson).amount1,
+          liquidity: (event.parsedJson as LPEventJson).liquidity,
+          totalSupply: (event.parsedJson as LPEventJson).total_supply,
+        }));
 
-        console.log("Processed event details:", {
-          eventType: processed.eventType,
-          timestamp: processed.timestamp,
-          txDigest: processed.txDigest,
-          sender: processed.sender,
-          lpCoinId: processed.lpCoinId,
-          token0Type: processed.token0Type,
-          token1Type: processed.token1Type,
-          amount0: processed.amount0,
-          amount1: processed.amount1,
-          liquidity: processed.liquidity,
-          totalSupply: processed.totalSupply,
-        });
-
-        return processed;
-      });
-
-      const allProcessedEvents = [...processedMintEvents];
-      console.log("Processed LP events:", allProcessedEvents);
-
-      // Store events in database
-      //   try {
-      //     const response = await fetch("/api/lp-events", {
-      //       method: "POST",
-      //       headers: {
-      //         "Content-Type": "application/json",
-      //       },
-      //       body: JSON.stringify(allProcessedEvents),
-      //     });
-
-      //     if (!response.ok) {
-      //       throw new Error("Failed to store LP events");
-      //     }
-      //     console.log("Successfully stored LP events in database");
-      //   } catch (error) {
-      //     console.error("Error storing LP events:", error);
-      //   }
-
-      //   return allProcessedEvents;
+      setEvents(lpEvents || []);
+      console.log("Processed LP events:", lpEvents);
+      return lpEvents;
     } catch (error) {
       console.error("Error processing LP events:", error);
       throw error;
     }
   };
+
   // Function to add liquidity (requires amounts and existing pair)
   const handleAddLiquidity = async () => {
     if (!account?.address) {
@@ -853,6 +894,140 @@ export default function MainCon() {
   //   }
   // };
 
+  function EventsDisplay({ events }: { events: LPEvent[] }) {
+    if (!events?.length) {
+      return (
+        <div className="text-center text-gray-400 mt-4">No LP events found</div>
+      );
+    }
+
+    return (
+      <div className="mt-6 overflow-x-auto rounded-lg border border-gray-800">
+        <table className="min-w-full divide-y divide-gray-800">
+          <thead className="bg-gray-900">
+            <tr>
+              {/* <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Time
+              </th> */}
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Amount 0
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Amount 1
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Liquidity
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                LP Token ID
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Sender
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Token0 Type
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Token1 Type
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Total Supply
+              </th>
+              <th
+                scope="col"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-400"
+              >
+                Type
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800 bg-gray-900/50">
+            {events.map((event, idx) => {
+              console.log("Rendering event:", event);
+              return (
+                <tr key={idx} className="hover:bg-gray-800/50">
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.amount0
+                      ? Number(event.amount0).toLocaleString()
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.amount1
+                      ? Number(event.amount1).toLocaleString()
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.liquidity
+                      ? Number(event.liquidity).toLocaleString()
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-cyan-500 whitespace-nowrap">
+                    {event.lpCoinId
+                      ? `${event.lpCoinId.slice(0, 6)}...${event.lpCoinId.slice(
+                          -4
+                        )}`
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.sender
+                      ? `${event.sender.slice(0, 6)}...${event.sender.slice(
+                          -4
+                        )}`
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.token0Type?.name
+                      ? event.token0Type.name.split("::").pop()
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.token1Type?.name
+                      ? event.token1Type.name.split("::").pop()
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.totalSupply
+                      ? Number(event.totalSupply).toLocaleString()
+                      : "N/A"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
+                    {event.type ? event.type.split("::").pop() : "N/A"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
   return (
     <>
       {/* Main Content */}
@@ -1080,6 +1255,14 @@ export default function MainCon() {
           </div>
         </div>
       </main>
+      <div className="mt-8 max-w-full  mx-auto px-4">
+        <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg p-4">
+          <h2 className="text-lg text-gray-300 font-semibold mb-4">
+            Recent LP Event
+          </h2>
+          <EventsDisplay events={events} />
+        </div>
+      </div>
     </>
   );
 }
