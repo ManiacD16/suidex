@@ -1,6 +1,6 @@
 // src/main.tsx
 import React from "react";
-import ReactDOM from "react-dom/client";
+import * as ReactDOM from "react-dom/client";
 import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getFullnodeUrl } from "@mysten/sui.js/client";

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import SimpleBar from "simplebar-react";
 import "simplebar/dist/simplebar.min.css";
+import { toast } from "react-toastify";
 
 interface Token {
   id: string;
@@ -113,6 +114,16 @@ const TokenInput: React.FC<TokenInputProps> = ({
       console.error("Error fetching token balance:", error);
       return "0";
     }
+  };
+
+  const handleOpenModal = () => {
+    if (!currentAccount?.address) {
+      toast.error("Please connect your wallet to select a token.");
+      return;
+    }
+
+    setIsOpen(true);
+    // toast.success("Wallet Connected");
   };
 
   useEffect(() => {
@@ -243,7 +254,10 @@ const TokenInput: React.FC<TokenInputProps> = ({
               </div>
             )}
             <button
-              onClick={() => setIsOpen(true)}
+              onClick={handleOpenModal}
+              style={{
+                boxShadow: "0px 0px 10px cyan, 0px 0px 10px cyan inset",
+              }}
               className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2 py-1 sm:py-[0.4rem] rounded-full transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 active:scale-95 ${
                 token
                   ? "bg-gray-900 border-cyan-400"
@@ -306,7 +320,7 @@ const TokenInput: React.FC<TokenInputProps> = ({
                   opacity: 1,
                 }}
               /> */}
-              <SimpleBar style={{ maxHeight: "500px" }}>
+              <SimpleBar style={{ maxHeight: "400px" }}>
                 <div className="flex justify-between items-center mb-3 sm:mb-4">
                   <h3 className="text-lg sm:text-xl font-semibold text-white">
                     Select Token

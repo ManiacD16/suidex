@@ -19,7 +19,7 @@ const SocialIcon: React.FC<{ Icon: React.ElementType; href: string }> = ({
 
 export default function Footer() {
   return (
-    <footer className="text-white px-6 w-full">
+    <footer className="text-white px-6 w-full bottom-0">
       <div className="w-full bottom-0 lg:mt-0 lg:mb-0 mb-2 mt-4 mx-auto flex flex-col md:flex-row justify-between items-center md:items-start">
         {/* Logo */}
         <div className="flex flex-col items-center space-y-4 md:space-y-0 md:items-start">

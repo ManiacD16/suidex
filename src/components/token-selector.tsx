@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import SimpleBar from "simplebar-react";
 import "simplebar/dist/simplebar.min.css";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 interface Token {
   metadata: any;
@@ -58,6 +60,10 @@ export default function TokenSelector({
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // const closeToastManually = () => {
+  //   toast.dismiss(); // This will dismiss all toasts
+  // };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -190,6 +196,10 @@ export default function TokenSelector({
   }, [suiClient, currentAccount]);
 
   const handleTokenSelect = (token: TokenInfo) => {
+    if (!token) {
+      toast.error("No token selected! Please try again.");
+      return;
+    }
     const selected: Token = {
       id: token.id,
       name: token.metadata?.name || "",
@@ -202,10 +212,27 @@ export default function TokenSelector({
     setSelectedToken(selected);
     onSelect(selected);
     setIsOpen(false);
+
+    toast.success(`${selected.name} selected!`);
+  };
+
+  const handleOpenModal = () => {
+    if (!currentAccount?.address) {
+      toast.error("Please connect your wallet to select a token.");
+      return;
+    }
+
+    setIsOpen(true);
+    // toast.success("Wallet Connected");
   };
 
   return (
-    <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20">
+    <div
+      // style={{
+      //   boxShadow: "0px 0px 10px cyan, 0px 0px 10px cyan inset",
+      // }}
+      className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 overflow-x-hidden"
+    >
       <div
         className={`flex ${
           !showInput || !selectedToken ? "justify-center" : "justify-between"
@@ -230,7 +257,10 @@ export default function TokenSelector({
         )}
 
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={handleOpenModal}
+          style={{
+            boxShadow: "0px 0px 10px cyan, 0px 0px 10px cyan inset",
+          }}
           className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2 py-1 sm:py-[0.4rem] rounded-full transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 active:scale-95 ${
             selectedToken
               ? "bg-gray-900 border-cyan-400"
@@ -277,19 +307,6 @@ export default function TokenSelector({
             className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
             style={{ overflow: "hidden" }}
           >
-            {/* Background Image and Overlay
-            <div
-              className="absolute inset-0 z-0"
-              style={{
-                backgroundImage:
-                  "url(https://cryptologos.cc/logos/sui-sui-logo.png)",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-                filter: "blur(5px)",
-                opacity: 1,
-              }}
-            /> */}
             <SimpleBar style={{ maxHeight: "500px" }}>
               <div className="flex justify-between items-center mb-3 sm:mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold text-white">

@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import BackgroundEffects from "./BackgroundEffects";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
-import { Wallet, Search, X } from "lucide-react";
+import { Wallet, Search, X, Menu } from "lucide-react";
 import { debounce } from "lodash";
 import SimpleBar from "simplebar-react";
-import "simplebar/dist/simplebar.min.css";
+import "simplebar/dist/simplebar.min.css"; // Add Menu and Close icons for Hamburger
+import { useNavigate } from "react-router-dom"; // Import navigate for redirection
 
 interface TokenInfo {
   id: string;
@@ -44,6 +45,8 @@ export default function Header() {
   const searchRef = useRef<HTMLDivElement>(null);
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // State for handling hamburger menu
+  const navigate = useNavigate(); // For page redirection
 
   const fetchBalance = async (
     tokenId: string,
@@ -178,6 +181,10 @@ export default function Header() {
     setDropdownVisible(!dropdownVisible);
   };
 
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen); // Toggle hamburger menu
+  };
+
   const handleSearchFocus = () => {
     setIsSearchFocused(true);
   };
@@ -237,88 +244,209 @@ export default function Header() {
               X
             </span>
           </div>
-
-          {/* Desktop Search */}
-          <div ref={searchRef} className="relative hidden sm:block">
-            <div
-              className={`relative transition-all duration-300 ${
-                isSearchFocused ? "w-96" : "w-64"
-              }`}
+          {/* Tabs for Swap and Pool */}
+          <div
+            className={`hidden md:flex space-x-4 ml-auto ${
+              isSearchFocused ? "hidden" : "flex"
+            }`}
+          >
+            <button
+              onClick={() => navigate("/swap")}
+              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
             >
-              <div className="absolute left-3 flex items-center pointer-events-none">
-                <div className="mt-3">
-                  <Search
-                    className={`h-4 w-4 ${
-                      isSearchFocused ? "text-cyan-500" : "text-gray-400"
-                    }`}
-                  />
-                </div>
-              </div>
-              <input
-                type="text"
-                placeholder="Search tokens..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={handleSearchFocus}
-                onBlur={handleSearchBlur}
-                className={`w-full bg-gray-800/50 text-gray-200 pl-9 pr-8 py-2 rounded-xl border ${
-                  isSearchFocused
-                    ? "border-cyan-500 ring-1 ring-cyan-500/50"
-                    : "border-gray-700 hover:border-gray-600"
-                } focus:outline-none transition-all duration-300`}
-              />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors duration-200"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+              Swap
+            </button>
+            <button
+              onClick={() => navigate("/pool")}
+              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+            >
+              Pool
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = "https://suitrumpnew.vercel.app/";
+              }}
+              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+            >
+              Earn
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = "https://sui-trump.com";
+              }}
+              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+            >
+              SuiTrump
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = "https://bridge.sui.io/";
+              }}
+              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+            >
+              Bridge
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = "https://bridge.sui.io/";
+              }}
+              className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+            >
+              Docs
+            </button>
+          </div>
 
-              {/* Desktop Search Results */}
-              {/* Desktop Search Results - Fixed blurring and backdrop */}
-              {isSearchFocused && searchQuery && (
-                <>
-                  {/* Semi-transparent overlay that doesn't blur */}
-                  <div
-                    className="fixed inset-0 bg-black/20 z-[51]"
-                    onClick={() => {
-                      setIsSearchFocused(false);
-                      setSearchQuery("");
-                    }}
-                    style={{ marginTop: "60px" }} // Adjust this value based on your header height
-                  />
+          {/* Mobile Hamburger Button */}
+          <button
+            onClick={toggleMenu}
+            className="block md:hidden p-2 text-gray-400 hover:text-gray-200 transition-colors duration-200"
+          >
+            {isMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </button>
+        </div>
 
-                  {/* Results Container */}
-                  <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[28rem] bg-gray-800 rounded-xl border border-gray-700 shadow-xl overflow-hidden z-[52]">
-                    <div className="backdrop-blur-sm bg-gray-800/80">
-                      <SimpleBar style={{ maxHeight: "450px" }}>
-                        <div className="max-h-[70vh] ">
-                          <div className="p-2 space-y-1">
-                            {isLoading ? (
-                              <div className="p-4 text-center text-gray-400">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-500 mx-auto"></div>
-                              </div>
-                            ) : filteredTokens.length > 0 ? (
-                              filteredTokens.map((token) => (
-                                <TokenItem key={token.id} token={token} />
-                              ))
-                            ) : (
-                              <div className="p-4 text-center text-gray-400">
-                                No tokens found
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </SimpleBar>
-                    </div>
-                  </div>
-                </>
-              )}
+        {/* Mobile Menu - Hamburger */}
+        {isMenuOpen && (
+          <div className="absolute top-14 left-2 w-[150px] bg-[#1f2d3d]/10 backdrop-blur-md border border-indigo-900 rounded-2xl py-4 z-50 ">
+            <div className="flex flex-col items-center space-y-4">
+              <button
+                onClick={() => {
+                  navigate("/swap");
+                  setIsMenuOpen(false); // Close menu after navigation
+                }}
+                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              >
+                Swap
+              </button>
+              <button
+                onClick={() => {
+                  navigate("/pool");
+                  setIsMenuOpen(false); // Close menu after navigation
+                }}
+                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              >
+                Pool
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = "https://suitrumpnew.vercel.app/";
+                }}
+                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              >
+                Earn
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = "https://sui-trump.com";
+                }}
+                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              >
+                SuiTrump
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = "https://bridge.sui.io/";
+                }}
+                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              >
+                Bridge
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = "https://bridge.sui.io/";
+                }}
+                className="text-gray-200 hover:text-cyan-500 transition-colors duration-200"
+              >
+                Docs
+              </button>
             </div>
           </div>
+        )}
+        {/* Desktop Search */}
+        <div ref={searchRef} className="relative hidden sm:block">
+          <div
+            className={`relative transition-all duration-300 ${
+              isSearchFocused ? "w-72" : "w-64"
+            }`}
+          >
+            <div className="absolute left-3 flex items-center pointer-events-none">
+              <div className="mt-3">
+                <Search
+                  className={`h-4 w-4 ${
+                    isSearchFocused ? "text-cyan-500" : "text-gray-400"
+                  }`}
+                />
+              </div>
+            </div>
+            <input
+              type="text"
+              placeholder="Search tokens..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
+              className={`w-full bg-gray-800/50 text-gray-200 pl-9 pr-8 py-2 rounded-xl border ${
+                isSearchFocused
+                  ? "border-cyan-500 ring-1 ring-cyan-500/50"
+                  : "border-gray-700 hover:border-gray-600"
+              } focus:outline-none transition-all duration-300`}
+            />
+            {searchQuery && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors duration-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+
+            {/* Desktop Search Results */}
+            {/* Desktop Search Results - Fixed blurring and backdrop */}
+            {isSearchFocused && searchQuery && (
+              <>
+                {/* Semi-transparent overlay that doesn't blur */}
+                <div
+                  className="fixed inset-0 bg-black/20 z-[51]"
+                  onClick={() => {
+                    setIsSearchFocused(false);
+                    setSearchQuery("");
+                  }}
+                  style={{ marginTop: "60px" }} // Adjust this value based on your header height
+                />
+
+                {/* Results Container */}
+                <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[28rem] bg-gray-800 rounded-xl border border-gray-700 shadow-xl overflow-hidden z-[52]">
+                  <div className="backdrop-blur-sm bg-gray-800/80">
+                    <SimpleBar style={{ maxHeight: "450px" }}>
+                      <div className="max-h-[70vh] ">
+                        <div className="p-2 space-y-1">
+                          {isLoading ? (
+                            <div className="p-4 text-center text-gray-400">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-500 mx-auto"></div>
+                            </div>
+                          ) : filteredTokens.length > 0 ? (
+                            filteredTokens.map((token) => (
+                              <TokenItem key={token.id} token={token} />
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-gray-400">
+                              No tokens found
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </SimpleBar>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
+
         <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
           {/* Mobile Search Button */}
           <button

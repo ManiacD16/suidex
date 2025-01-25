@@ -592,171 +592,173 @@ const SwapPage = () => {
   };
 
   return (
-    <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700 p-4">
-      <div className="flex justify-between items-center mb-4">
-        <span className="text-lg text-gray-300 font-semibold">Swap</span>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-2 rounded-lg hover:bg-gray-700/50"
-          >
-            <Settings className="w-5 h-5 text-gray-400" />
-          </button>
-          <div className="text-sm text-gray-300 bg-gray-800/50 px-3 py-1 rounded-full">
-            Slippage:{" "}
-            <span className="font-semibold text-cyan-500">{slippage}%</span>
-          </div>
-        </div>
-      </div>
-      {showSettings && renderSettingsPanel()}
-      {/* Pair Info Card */}
-      {token0 && token1 && (
-        <div
-          className={`p-4 rounded-lg mb-4 ${
-            pairExists
-              ? "bg-green-500/5 border-green-500/20"
-              : "bg-yellow-500/5 border-yellow-500/20"
-          } border`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span
-                className={pairExists ? "text-green-500" : "text-yellow-500"}
-              >
-                {pairExists ? "✓" : "⚠"}
-              </span>
-              <div>
-                <p className="text-sm">
-                  {pairExists ? "Trading Pair Active" : "New Trading Pair"}
-                </p>
-                {currentPairId && (
-                  <p className="text-xs text-gray-500">
-                    ID: {currentPairId?.slice(0, 8)}...
-                    {currentPairId?.slice(-6)}
-                  </p>
-                )}
-              </div>
+    <main className="max-w-[480px] mx-auto pt-8 px-4">
+      <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg transition-all duration-300 hover:border-gray-700 p-4">
+        <div className="flex justify-between items-center mb-4">
+          <span className="text-lg text-gray-300 font-semibold">Swap</span>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="p-2 rounded-lg hover:bg-gray-700/50"
+            >
+              <Settings className="w-5 h-5 text-gray-400" />
+            </button>
+            <div className="text-sm text-gray-300 bg-gray-800/50 px-3 py-1 rounded-full">
+              Slippage:{" "}
+              <span className="font-semibold text-cyan-500">{slippage}%</span>
             </div>
-            {pairExists && reserves.reserve0 !== "0" && (
-              <div className="text-right">
-                <p className="text-xs text-gray-500 mb-1">Pool Reserves</p>
-                <p className="text-sm">
-                  {token0
-                    ? (
-                        Number(reserves.reserve0) /
-                        Math.pow(10, token0.decimals)
-                      ).toFixed(3)
-                    : "0"}{" "}
-                  /{" "}
-                  {token1
-                    ? (
-                        Number(reserves.reserve1) /
-                        Math.pow(10, token1.decimals)
-                      ).toFixed(3)
-                    : "0"}
-                </p>
-              </div>
-            )}
           </div>
         </div>
-      )}
+        {showSettings && renderSettingsPanel()}
+        {/* Pair Info Card */}
+        {token0 && token1 && (
+          <div
+            className={`p-4 rounded-lg mb-4 ${
+              pairExists
+                ? "bg-green-500/5 border-green-500/20"
+                : "bg-yellow-500/5 border-yellow-500/20"
+            } border`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className={pairExists ? "text-green-500" : "text-yellow-500"}
+                >
+                  {pairExists ? "✓" : "⚠"}
+                </span>
+                <div>
+                  <p className="text-sm">
+                    {pairExists ? "Trading Pair Active" : "New Trading Pair"}
+                  </p>
+                  {currentPairId && (
+                    <p className="text-xs text-gray-500">
+                      ID: {currentPairId?.slice(0, 8)}...
+                      {currentPairId?.slice(-6)}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {pairExists && reserves.reserve0 !== "0" && (
+                <div className="text-right">
+                  <p className="text-xs text-gray-500 mb-1">Pool Reserves</p>
+                  <p className="text-sm">
+                    {token0
+                      ? (
+                          Number(reserves.reserve0) /
+                          Math.pow(10, token0.decimals)
+                        ).toFixed(3)
+                      : "0"}{" "}
+                    /{" "}
+                    {token1
+                      ? (
+                          Number(reserves.reserve1) /
+                          Math.pow(10, token1.decimals)
+                        ).toFixed(3)
+                      : "0"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-      {/* Token Input Section */}
-      <div className="space-y-3">
-        <div className="space-y-2">
-          {/* <div className="flex justify-between text-sm mb-2">
+        {/* Token Input Section */}
+        <div className="space-y-3">
+          <div className="space-y-2">
+            {/* <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-400">You Pay</span>
                   <span className="text-gray-400">Balance: {balance0}</span>
                 </div> */}
-          <SwapTokenSelector
-            token0={token0}
-            token1={token1}
-            amount0={amount0}
-            amount1={amount1}
-            onSwapTokens={handleSwapTokens}
-            onAmount0Change={setAmount0}
-            onAmount1Change={setAmount1}
-            onToken0Select={handleToken0Change}
-            onToken1Select={handleToken1Change}
-            showInput={pairExists}
-          />
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-500" />
-              <span className="text-sm text-red-500">{error}</span>
-            </div>
-          )}
-          {estimatedOutput && (
-            <div className="mt-2 p-3 bg-gray-800/30 rounded-lg space-y-2">
-              <div className="flex justify-between text-sm text-gray-400">
-                <span>Minimum received after slippage:</span>
-                <span>
-                  {(estimatedOutput * (1 - slippage / 100)).toFixed(3)}{" "}
-                  {token1?.symbol}
-                </span>
+            <SwapTokenSelector
+              token0={token0}
+              token1={token1}
+              amount0={amount0}
+              amount1={amount1}
+              onSwapTokens={handleSwapTokens}
+              onAmount0Change={setAmount0}
+              onAmount1Change={setAmount1}
+              onToken0Select={handleToken0Change}
+              onToken1Select={handleToken1Change}
+              showInput={pairExists}
+            />
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                <span className="text-sm text-red-500">{error}</span>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+            {estimatedOutput && (
+              <div className="mt-2 p-3 bg-gray-800/30 rounded-lg space-y-2">
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span>Minimum received after slippage:</span>
+                  <span>
+                    {(estimatedOutput * (1 - slippage / 100)).toFixed(3)}{" "}
+                    {token1?.symbol}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
 
-        {/* Swap Button */}
-        <button
-          onClick={pairExists ? handleSwap : undefined} // Use handleAddLiquidity when pair doesn't exist
-          disabled={
-            isSwapLoading ||
-            !token0 ||
-            !token1 ||
-            (!pairExists ? false : !amount0 || !amount1) // Only check amounts if pair exists
-          }
-          className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
-        >
-          {isSwapLoading ? (
-            <div className="flex items-center justify-center">
-              <svg
-                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
+          {/* Swap Button */}
+          <button
+            onClick={pairExists ? handleSwap : undefined} // Use handleAddLiquidity when pair doesn't exist
+            disabled={
+              isSwapLoading ||
+              !token0 ||
+              !token1 ||
+              (!pairExists ? false : !amount0 || !amount1) // Only check amounts if pair exists
+            }
+            className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
+          >
+            {isSwapLoading ? (
+              <div className="flex items-center justify-center">
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                {pairExists ? "Processing Swap..." : "Creating Pair..."}
+              </div>
+            ) : !pairExists ? (
+              <div className="flex items-center justify-center gap-2">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
                   stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              {pairExists ? "Processing Swap..." : "Creating Pair..."}
-            </div>
-          ) : !pairExists ? (
-            <div className="flex items-center justify-center gap-2">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-              Create Pair First
-            </div>
-          ) : (
-            "Swap Tokens"
-          )}
-        </button>
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                Create Pair First
+              </div>
+            ) : (
+              "Swap Tokens"
+            )}
+          </button>
+        </div>
       </div>
-    </div>
+    </main>
   );
 };
 

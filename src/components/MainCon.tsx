@@ -10,9 +10,11 @@ import {
 } from "@mysten/dapp-kit";
 import TokenSelector from "./token-selector";
 import { Transaction } from "@mysten/sui/transactions";
-import { toast } from "react-hot-toast";
+// import { toast } from "react-hot-toast";
 import { CONSTANTS } from "../constants/addresses";
 import { Settings, AlertCircle } from "lucide-react";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 interface Token {
   id: string; // The token ID is a string
@@ -642,7 +644,7 @@ export default function MainCon() {
         {
           onSuccess: (result) => {
             console.log("=== TRANSACTION SUCCEEDED ===", result);
-            toast.success("Swap completed successfully!", { id: toastId });
+            toast.success("Swap completed successfully!", { toastId });
             setAmount0("");
             setAmount1("");
           },
@@ -662,7 +664,7 @@ export default function MainCon() {
         ? "Price moved too much, try increasing slippage tolerance"
         : `Swap failed: ${errorMessage}`;
 
-      toast.error(userMessage, { id: toastId });
+      toast.error(userMessage, { toastId });
     } finally {
       console.log("=== SWAP COMPLETED ===");
       setIsSwapLoading(false);
@@ -789,17 +791,17 @@ export default function MainCon() {
         { transaction: tx },
         {
           onSuccess: () => {
-            toast.success("Pair creation successful!", { id: toastId });
+            toast.success("Pair creation successful!", { toastId });
             setTimeout(() => {
               window.location.reload();
             }, 1500);
           },
           onError: (error) => {
             if (error.message.includes("308")) {
-              toast.error("This pair already exists", { id: toastId });
+              toast.error("This pair already exists", { toastId });
             } else {
               toast.error(`Failed to create pair: ${error.message}`, {
-                id: toastId,
+                toastId,
               });
             }
           },
@@ -812,7 +814,7 @@ export default function MainCon() {
       if (errorMessage.includes("308")) {
         errorMessage = "Trading pair already exists";
       }
-      toast.error(errorMessage, { id: toastId });
+      toast.error(errorMessage, { toastId });
     } finally {
       setIsLoading(false);
     }
@@ -906,14 +908,27 @@ export default function MainCon() {
       }
 
       const addLiquidityTx = new Transaction();
-      const [splitCoin0] = addLiquidityTx.splitCoins(
-        addLiquidityTx.object(coinToSplit0.coinObjectId),
-        [addLiquidityTx.pure.u64(amount0Value)]
-      );
-      const [splitCoin1] = addLiquidityTx.splitCoins(
-        addLiquidityTx.object(coinToSplit1.coinObjectId),
-        [addLiquidityTx.pure.u64(amount1Value)]
-      );
+
+      const isSUI0 = sortedType0.includes("0x2::sui::SUI");
+      const isSUI1 = sortedType1.includes("0x2::sui::SUI");
+
+      const splitCoin0 = isSUI0
+        ? addLiquidityTx.splitCoins(addLiquidityTx.gas, [
+            addLiquidityTx.pure.u64(amount0Value),
+          ])[0]
+        : addLiquidityTx.splitCoins(
+            addLiquidityTx.object(coinToSplit0.coinObjectId),
+            [addLiquidityTx.pure.u64(amount0Value)]
+          )[0];
+
+      const splitCoin1 = isSUI1
+        ? addLiquidityTx.splitCoins(addLiquidityTx.gas, [
+            addLiquidityTx.pure.u64(amount1Value),
+          ])[0]
+        : addLiquidityTx.splitCoins(
+            addLiquidityTx.object(coinToSplit1.coinObjectId),
+            [addLiquidityTx.pure.u64(amount1Value)]
+          )[0];
 
       const deadline = Math.floor(Date.now() + 1200000); // 20 minutes
       const minAmount0 = (BigInt(amount0Value) * 95n) / 100n; // 5% slippage
@@ -989,10 +1004,12 @@ export default function MainCon() {
             // Clear inputs and show success message
             setAmount0("");
             setAmount1("");
-            toast.success("Liquidity added successfully!", { id: toastId });
+            toast.success("Liquidity added successfully!", { toastId });
           },
           onError: (error) => {
+            toast.error("Transaction error");
             console.error("Transaction error:", error);
+
             throw error;
           },
         }
@@ -1005,7 +1022,7 @@ export default function MainCon() {
         errorMessage = "Insufficient balance to complete the transaction";
       }
 
-      toast.error("Failed to add liquidity: " + errorMessage, { id: toastId });
+      toast.error("Failed to add liquidity: " + errorMessage, { toastId });
     } finally {
       setIsLoading(false);
     }
