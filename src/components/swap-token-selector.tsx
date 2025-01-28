@@ -81,11 +81,24 @@ const TokenInput: React.FC<TokenInputProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredTokens, setFilteredTokens] = useState<TokenInfo[]>([]);
 
   const formatTokenAmount = (amount: string, decimals: number): string => {
     const formattedAmount = Number(amount) / Math.pow(10, decimals);
     return formattedAmount.toFixed(Math.min(decimals, 2));
   };
+
+  useEffect(() => {
+    // Filter tokens based on the search query
+    const filtered = tokens.filter((token) => {
+      const name = token.metadata?.name?.toLowerCase() || "";
+      const symbol = token.metadata?.symbol?.toLowerCase() || "";
+      const query = searchQuery.toLowerCase();
+      return name.includes(query) || symbol.includes(query);
+    });
+    setFilteredTokens(filtered);
+  }, [searchQuery, tokens]);
 
   const fetchTokenBalance = async (
     tokenId: string,
@@ -344,6 +357,18 @@ const TokenInput: React.FC<TokenInputProps> = ({
                     </svg>
                   </button>
                 </div>
+                <div className="flex items-center justify-center">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search tokens..."
+                    className="w-[90%] p-2 text-white bg-gray-800 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-[#3a6bc9]"
+                    style={{
+                      boxShadow: "0px 0px 5px cyan, 0px 0px 5px cyan inset",
+                    }}
+                  />
+                </div>
                 <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
                   {isLoading ? (
                     <>
@@ -351,12 +376,12 @@ const TokenInput: React.FC<TokenInputProps> = ({
                       <TokenSkeleton />
                       <TokenSkeleton />
                     </>
-                  ) : tokens.length === 0 ? (
+                  ) : filteredTokens.length === 0 ? (
                     <div className="text-center text-gray-400 py-4 animate-fadeIn">
                       No tokens found in your wallet
                     </div>
                   ) : (
-                    tokens.map((token, index) => (
+                    filteredTokens.map((token, index) => (
                       <button
                         key={token.id}
                         className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300 animate-slideIn"

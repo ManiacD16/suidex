@@ -507,12 +507,107 @@ export default function MainCon() {
       await signAndExecute(
         { transaction: tx },
         {
-          onSuccess: () => {
-            toast.success("Pair creation successful!", { toastId });
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
+          onSuccess: async () => {
+            toast.update(toastId, {
+              render: "Pair Created Successfully",
+              type: "success",
+              isLoading: false,
+              autoClose: 5000,
+            });
+
+            // Check for pair existence after successful creation
+            try {
+              const token0Id = token0?.id;
+              const token1Id = token1?.id;
+
+              const [token0Obj, token1Obj] = await Promise.all([
+                suiClient.getObject({
+                  id: token0Id!,
+                  options: { showType: true },
+                }),
+                suiClient.getObject({
+                  id: token1Id!,
+                  options: { showType: true },
+                }),
+              ]);
+
+              const getBaseType = (coinType: string) => {
+                const match = coinType.match(/<(.+)>/);
+                return match ? match[1] : coinType;
+              };
+
+              const baseType0 = getBaseType(token0Obj.data?.type || "");
+              const baseType1 = getBaseType(token1Obj.data?.type || "");
+
+              const tx = new Transaction();
+              tx.moveCall({
+                target: `${CONSTANTS.PACKAGE_ID}::factory::get_pair`,
+                typeArguments: [baseType0, baseType1],
+                arguments: [tx.object(CONSTANTS.FACTORY_ID)],
+              });
+
+              const response = await suiClient.devInspectTransactionBlock({
+                transactionBlock: tx,
+                sender: account?.address || "",
+              });
+
+              if (response?.results?.[0]?.returnValues) {
+                const optionValue = response.results[0].returnValues[0];
+                if (Array.isArray(optionValue) && optionValue.length > 0) {
+                  const addressBytes = optionValue[0];
+                  if (Array.isArray(addressBytes) && addressBytes.length > 1) {
+                    const hexString = addressBytes
+                      .slice(1)
+                      .map((b) => b.toString(16).padStart(2, "0"))
+                      .join("");
+                    const pairId = `0x${hexString}`;
+
+                    const pairObject = await suiClient.getObject({
+                      id: pairId,
+                      options: {
+                        showContent: true,
+                        showType: true,
+                      },
+                    });
+
+                    if (
+                      pairObject.data?.content &&
+                      "fields" in pairObject.data.content &&
+                      typeof pairObject.data.content.fields === "object" &&
+                      pairObject.data.content.fields &&
+                      "reserve0" in pairObject.data.content.fields &&
+                      "reserve1" in pairObject.data.content.fields &&
+                      "block_timestamp_last" in pairObject.data.content.fields
+                    ) {
+                      const fields = pairObject.data.content.fields;
+
+                      setReserves({
+                        reserve0: fields.reserve0 as string,
+                        reserve1: fields.reserve1 as string,
+                        timestamp: fields.block_timestamp_last as number,
+                      });
+                    }
+
+                    setPairExists(true);
+                    setCurrentPairId(pairId);
+                  } else {
+                    resetPairState();
+                  }
+                } else {
+                  resetPairState();
+                }
+              } else {
+                resetPairState();
+              }
+            } catch (error) {
+              console.error(
+                "Error checking pair existence after creation:",
+                error
+              );
+              resetPairState();
+            }
           },
+
           onError: (error) => {
             if (error.message.includes("308")) {
               toast.error("This pair already exists", { toastId });

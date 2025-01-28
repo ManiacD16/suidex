@@ -54,16 +54,14 @@ export default function TokenSelector({
   showInput = false,
 }: TokenSelectorProps) {
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
+  const [filteredTokens, setFilteredTokens] = useState<TokenInfo[]>([]);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState(""); // Search query state
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const modalRef = useRef<HTMLDivElement>(null);
-
-  // const closeToastManually = () => {
-  //   toast.dismiss(); // This will dismiss all toasts
-  // };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -195,6 +193,17 @@ export default function TokenSelector({
     getTokens();
   }, [suiClient, currentAccount]);
 
+  useEffect(() => {
+    // Filter tokens based on the search query
+    const filtered = tokens.filter((token) => {
+      const name = token.metadata?.name?.toLowerCase() || "";
+      const symbol = token.metadata?.symbol?.toLowerCase() || "";
+      const query = searchQuery.toLowerCase();
+      return name.includes(query) || symbol.includes(query);
+    });
+    setFilteredTokens(filtered);
+  }, [searchQuery, tokens]);
+
   const handleTokenSelect = (token: TokenInfo) => {
     if (!token) {
       toast.error("No token selected! Please try again.");
@@ -223,16 +232,10 @@ export default function TokenSelector({
     }
 
     setIsOpen(true);
-    // toast.success("Wallet Connected");
   };
 
   return (
-    <div
-      // style={{
-      //   boxShadow: "0px 0px 10px cyan, 0px 0px 10px cyan inset",
-      // }}
-      className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 overflow-x-hidden"
-    >
+    <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 overflow-x-hidden">
       <div
         className={`flex ${
           !showInput || !selectedToken ? "justify-center" : "justify-between"
@@ -301,7 +304,7 @@ export default function TokenSelector({
       </div>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
+        <div className="fixed inset-0 mt-20 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
           <div
             ref={modalRef}
             className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
@@ -331,6 +334,18 @@ export default function TokenSelector({
                   </svg>
                 </button>
               </div>
+              <div className="flex items-center justify-center">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tokens..."
+                  className="w-[90%] p-2 text-white bg-gray-800 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-[#3a6bc9]"
+                  style={{
+                    boxShadow: "0px 0px 5px cyan, 0px 0px 5px cyan inset",
+                  }}
+                />
+              </div>
               <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
                 {isLoading ? (
                   <>
@@ -338,12 +353,12 @@ export default function TokenSelector({
                     <TokenSkeleton />
                     <TokenSkeleton />
                   </>
-                ) : tokens.length === 0 ? (
+                ) : filteredTokens.length === 0 ? (
                   <div className="text-center text-gray-400 py-4 animate-fadeIn">
-                    No tokens found in your wallet
+                    No tokens found for your search
                   </div>
                 ) : (
-                  tokens.map((token, index) => (
+                  filteredTokens.map((token, index) => (
                     <button
                       key={token.id}
                       className="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl hover:bg-[#222f3e] hover:bg-opacity-40 hover:backdrop-filter hover:backdrop-blur-sm transition-all duration-300 animate-slideIn"
