@@ -13,6 +13,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { CONSTANTS } from "../constants/addresses";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+// import axios from "axios";
 
 interface Token {
   id: string; // The token ID is a string
@@ -42,7 +43,7 @@ interface LPEvent {
   amount1: string;
   liquidity: string;
   totalSupply: string;
-  timestamp: string;
+  //   timestamp: string;
 }
 // interface ParsedEventJson {
 //   pair: string;
@@ -320,6 +321,7 @@ export default function MainCon() {
               }
               setPairExists(true);
               setCurrentPairId(pairId);
+              toast.success(`Pair found successfully! Pair ID: ${pairId}`);
             } else {
               resetPairState();
             }
@@ -381,73 +383,6 @@ export default function MainCon() {
 
     updateLiquidityAmounts();
   }, [pairExists, amount0, token0, token1]);
-
-  // const handleSlippageChange = (value: any) => {
-  //   setSlippage(value);
-  //   setShowSettings(false); // Hide the settings panel after selection
-  // };
-
-  // const [checkTrigger, setCheckTrigger] = useState(0);
-
-  // Helper function to wait
-  // const delay = (ms: number) =>
-  //   new Promise((resolve) => setTimeout(resolve, ms));
-  // Helper function to wait
-  // const delay = (ms: number) =>
-  //   new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Modified retryQueryEvent function
-  // const retryQueryEvent = async (
-  //   sortedType0: string,
-  //   sortedType1: string,
-  //   maxRetries = 3
-  // ) => {
-  //   let retryCount = 0;
-
-  //   while (retryCount < maxRetries) {
-  //     try {
-  //       await delay(1000 * (retryCount + 1));
-
-  //       // Query for pair without using digest
-  //       let newPairEvent = await suiClient.queryEvents({
-  //         query: {
-  //           MoveEventType: `${CONSTANTS.PACKAGE_ID}::factory::PairCreated`,
-  //         },
-  //       });
-
-  //       if (newPairEvent.data && newPairEvent.data.length > 0) {
-  //         // Try to find the matching pair for our token types
-  //         const matchingEvent = newPairEvent.data.find((event) => {
-  //           const eventData = event.parsedJson as any;
-  //           return (
-  //             eventData?.token0?.type === sortedType0 &&
-  //             eventData?.token1?.type === sortedType1
-  //           );
-  //         });
-
-  //         if (matchingEvent) {
-  //           console.log("Found matching pair event:", matchingEvent);
-  //           return { data: [matchingEvent] };
-  //         }
-  //       }
-
-  //       retryCount++;
-  //       console.log(`Retry attempt ${retryCount} of ${maxRetries}`);
-  //       await delay(1000); // Wait before next retry
-  //     } catch (error) {
-  //       console.error(
-  //         `Error during event query attempt ${retryCount + 1}:`,
-  //         error
-  //       );
-  //       if (retryCount === maxRetries - 1) {
-  //         throw error;
-  //       }
-  //       retryCount++;
-  //     }
-  //   }
-
-  //   throw new Error("Failed to retrieve pair creation event after retries");
-  // };
 
   // Modified handleCreatePair function
   const handleCreatePair = async () => {
@@ -659,26 +594,10 @@ export default function MainCon() {
             amount1: parsed.amount1,
             liquidity: parsed.liquidity,
             totalSupply: parsed.totalSupply,
-            timestamp: event.timestampMs,
+            // timestamp: event.timestampMs,
           };
           console.log("Processed event:", processed);
           // Store events in database
-          // try {
-          //   const response = await fetch("/api/lp-events", {
-          //     method: "POST",
-          //     headers: {
-          //       "Content-Type": "application/json",
-          //     },
-          //     body: JSON.stringify(processedEvents),
-          //   });
-
-          //   if (!response.ok) {
-          //     throw new Error("Failed to store LP events");
-          //   }
-          //   console.log("Successfully stored LP events in database");
-          // } catch (error) {
-          //   console.error("Error storing LP events:", error);
-          // }
           return processed;
         });
 
@@ -730,6 +649,22 @@ export default function MainCon() {
 
       setEvents(lpEvents || []);
       console.log("Processed LP events:", lpEvents);
+      try {
+        const response = await fetch("http://localhost:5000/api/lpcoin", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(lpEvents),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to store LP events");
+        }
+        console.log("Successfully stored LP events in database");
+      } catch (error) {
+        console.error("Error storing LP events:", error);
+      }
       return lpEvents;
     } catch (error) {
       console.error("Error processing LP events:", error);
@@ -880,7 +815,7 @@ export default function MainCon() {
             try {
               // Process LP events
               const lpEvents = await processLPEvent(result.digest);
-              console.log("Processed LP events:", lpEvents);
+              console.log("Processed AddedLP events:", lpEvents);
 
               // Refresh the reserves and rates
               try {
