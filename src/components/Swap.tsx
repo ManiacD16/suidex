@@ -8,6 +8,7 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
+import { useNavigate } from "react-router-dom";
 import { Transaction } from "@mysten/sui/transactions";
 import { toast } from "react-hot-toast";
 import { CONSTANTS } from "../constants/addresses";
@@ -32,6 +33,7 @@ const formatTokenAmount = (amount: string, decimals: number) => {
 };
 
 const SwapPage = () => {
+  const navigate = useNavigate();
   const [amount1, setAmount1] = useState<string>("");
   const [slippage, setSlippage] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
@@ -745,7 +747,10 @@ const SwapPage = () => {
                 {pairExists ? "Processing Swap..." : "Creating Pair..."}
               </div>
             ) : !pairExists ? (
-              <div className="flex items-center justify-center gap-2">
+              <div
+                onClick={() => navigate("/pool")}
+                className="flex items-center justify-center gap-2"
+              >
                 <svg
                   className="w-5 h-5"
                   fill="none"
