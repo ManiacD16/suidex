@@ -1,6 +1,6 @@
 "use client";
 import Header from "./components/Header";
-import MainCon from "./components/MainCon";
+// import MainCon from "./components/MainCon";
 import Footer from "./components/footer";
 import Pool from "./components/pool";
 import Liquidity from "./components/liquidity";
@@ -34,7 +34,8 @@ export default function App() {
           {/* <Route path="/header" element={<Header />} /> */}
           <Route path="/main" element={<Main />} />
           <Route path="/swap" element={<SwapPage />} />
-          <Route path="/" element={<MainCon />} />
+          <Route path="/" element={<SwapPage />} />
+          {/* <Route path="/" element={<MainCon />} /> */}
           <Route path="/pool" element={<Pool />} />
           <Route path="/addliquidity" element={<Liquidity />} />
         </Routes>
