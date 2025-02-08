@@ -206,7 +206,7 @@ const SwapPage = () => {
           suiClient.getObject({ id: token1Id, options: { showType: true } }),
         ]);
 
-        const getBaseType = (coinType: string) => {
+        const getBaseType = (coinType: any) => {
           const match = coinType.match(/<(.+)>/);
           return match ? match[1] : coinType;
         };
@@ -259,10 +259,16 @@ const SwapPage = () => {
                 "block_timestamp_last" in pairObject.data.content.fields
               ) {
                 const fields = pairObject.data.content.fields;
+
+                const isToken0Base = baseType0 < baseType1;
                 setReserves({
-                  reserve0: fields.reserve0 as string,
-                  reserve1: fields.reserve1 as string,
-                  timestamp: fields.block_timestamp_last as number,
+                  reserve0: isToken0Base
+                    ? String(fields.reserve0)
+                    : String(fields.reserve1),
+                  reserve1: isToken0Base
+                    ? String(fields.reserve1)
+                    : String(fields.reserve0),
+                  timestamp: Number(fields.block_timestamp_last) || 0,
                 });
               }
               setPairExists(true);
@@ -509,14 +515,17 @@ const SwapPage = () => {
       if (!coinToUse) {
         throw new Error("Insufficient balance");
       }
-
+      const isSUI = coinToUse.coinType === "0x2::sui::SUI";
       // === STEP 6: Setup Transaction ===
       const deadline = Math.floor(Date.now() + 1200000); // 20 minutes
       const swapTx = new Transaction();
-      const [splitCoin] = swapTx.splitCoins(
-        swapTx.object(coinToUse.coinObjectId),
-        [swapTx.pure.u64(scaledAmountIn.toString())]
-      );
+      const [splitCoin] = isSUI
+        ? swapTx.splitCoins(swapTx.gas, [
+            swapTx.pure.u64(scaledAmountIn.toString()),
+          ])
+        : swapTx.splitCoins(swapTx.object(coinToUse.coinObjectId), [
+            swapTx.pure.u64(scaledAmountIn.toString()),
+          ]);
 
       console.log("=== TRANSACTION SETUP ===", {
         swapFunction,

@@ -52,10 +52,9 @@ interface LPEvent {
 // }
 
 const formatTokenAmount = (amount: string, decimals: number) => {
-  const formattedAmount = Number(amount) / Math.pow(10, decimals); // Adjust for the token's decimals
-  return formattedAmount.toFixed(Math.min(decimals, 6)); // Limit to a maximum of 6 decimal places for display
+  const formattedAmount = Number(amount) / Math.pow(10, decimals);
+  return formattedAmount.toFixed(3); // Always show 3 decimal places for consistency
 };
-
 export default function MainCon() {
   const [amount1, setAmount1] = useState<string>("");
   // const [checkTrigger, setCheckTrigger] = useState(0);
@@ -100,19 +99,29 @@ export default function MainCon() {
     }
 
     try {
-      const inputAmount = Number(amount);
-      const suggestedAmount =
-        inputAmount * (Number(reserves.reserve0) / Number(reserves.reserve1));
+      // Convert input amount to the smallest unit using token0's decimals
+      const inputAmountSmallestUnit =
+        parseFloat(amount) * Math.pow(10, token0.decimals);
+
+      // Convert reserves to their actual values considering decimals
+      const reserve0Actual =
+        Number(reserves.reserve0) / Math.pow(10, token0.decimals);
+      const reserve1Actual =
+        Number(reserves.reserve1) / Math.pow(10, token1.decimals);
+
+      // Calculate the ratio and suggested amount
+      const ratio = reserve1Actual / reserve0Actual;
+      const suggestedAmount = parseFloat(amount) * ratio;
 
       console.log("Calculation details:", {
-        inputAmount,
-        reserve0: reserves.reserve0,
-        reserve1: reserves.reserve1,
-        ratio: Number(reserves.reserve0) / Number(reserves.reserve1),
+        inputAmount: amount,
+        inputAmountSmallestUnit,
+        reserve0Actual,
+        reserve1Actual,
+        ratio,
         suggestedAmount,
       });
 
-      // Add toFixed(3) here
       return suggestedAmount.toFixed(3);
     } catch (error) {
       console.error("Error calculating suggested amount:", error);
@@ -199,7 +208,7 @@ export default function MainCon() {
           "balance" in coin.data.content.fields
         ) {
           const balance = coin.data.content.fields.balance as string;
-
+          console.log("Balance:", balance);
           // Format the balance with the token's decimals
           setBalance(formatTokenAmount(balance, token.decimals));
         }
@@ -207,6 +216,8 @@ export default function MainCon() {
         console.error("Error fetching balance:", error);
       }
     };
+    console.log("Token0:", token0);
+    console.log("Token1:", token1);
 
     if (token0) fetchBalance(token0, setBalance0);
     if (token1) fetchBalance(token1, setBalance1);
@@ -251,7 +262,6 @@ export default function MainCon() {
       if (!token0 || !token1) return;
       try {
         console.log("Checking pair existence for tokens:", { token0, token1 });
-
         const token0Id = token0.id;
         const token1Id = token1.id;
 
@@ -260,7 +270,7 @@ export default function MainCon() {
           suiClient.getObject({ id: token1Id, options: { showType: true } }),
         ]);
 
-        const getBaseType = (coinType: string) => {
+        const getBaseType = (coinType: any) => {
           const match = coinType.match(/<(.+)>/);
           return match ? match[1] : coinType;
         };
@@ -294,7 +304,7 @@ export default function MainCon() {
                 .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
               const pairId = `0x${hexString}`;
-
+              console.log("Pair ID:", pairId);
               const pairObject = await suiClient.getObject({
                 id: pairId,
                 options: {
@@ -313,15 +323,25 @@ export default function MainCon() {
                 "block_timestamp_last" in pairObject.data.content.fields
               ) {
                 const fields = pairObject.data.content.fields;
+                const isToken0Base = baseType0 < baseType1;
+                console.log("Fields:", fields);
+                // Get the reserves based on the token order
+                const reserve0 = isToken0Base
+                  ? fields.reserve0
+                  : fields.reserve1;
+                const reserve1 = isToken0Base
+                  ? fields.reserve1
+                  : fields.reserve0;
+
+                // Set the reserves without any decimal adjustment (raw values)
                 setReserves({
-                  reserve0: fields.reserve0 as string,
-                  reserve1: fields.reserve1 as string,
-                  timestamp: fields.block_timestamp_last as number,
+                  reserve0: String(reserve0),
+                  reserve1: String(reserve1),
+                  timestamp: Number(fields.block_timestamp_last) || 0,
                 });
               }
               setPairExists(true);
               setCurrentPairId(pairId);
-              toast.success(`Pair found successfully! Pair ID: ${pairId}`);
             } else {
               resetPairState();
             }
@@ -718,29 +738,40 @@ export default function MainCon() {
 
       const [sortedType0, sortedType1] = sortTokens(baseType0, baseType1);
 
+      const needToSwap = sortedType0 !== baseType0;
+      console.log("Token sort check:", {
+        needToSwap,
+        original: { baseType0, baseType1 },
+        sorted: { sortedType0, sortedType1 },
+      });
+
       // Get token decimals
-      const getTokenDecimals = (tokenObj: any): number => {
-        if (
-          tokenObj?.data?.content &&
-          "fields" in tokenObj.data.content &&
-          typeof tokenObj.data.content.fields === "object" &&
-          tokenObj.data.content.fields &&
-          "decimals" in tokenObj.data.content.fields
-        ) {
-          return Number(tokenObj.data.content.fields.decimals);
-        }
-        return 9; // Default to 9 decimals if not found
-      };
+      // const getTokenDecimals = (tokenObj: any): number => {
+      //   if (
+      //     tokenObj?.data?.content &&
+      //     "fields" in tokenObj.data.content &&
+      //     typeof tokenObj.data.content.fields === "object" &&
+      //     tokenObj.data.content.fields &&
+      //     "decimals" in tokenObj.data.content.fields
+      //   ) {
+      //     return Number(tokenObj.data.content.fields.decimals);
+      //   }
+      //   return 9; // Default to 9 decimals if not found
+      // };
 
-      const decimals0 = getTokenDecimals(token0Obj);
-      const decimals1 = getTokenDecimals(token1Obj);
+      // const decimals0 = getTokenDecimals(token0Obj);
+      // const decimals1 = getTokenDecimals(token1Obj);
 
+      const [finalAmount0, finalAmount1, finalDecimals0, finalDecimals1] =
+        needToSwap
+          ? [amount1, amount0, token1.decimals, token0.decimals]
+          : [amount0, amount1, token0.decimals, token1.decimals];
       // Calculate amounts with proper decimal handling
       const amount0Value = Math.floor(
-        parseFloat(amount0) * Math.pow(10, decimals0)
+        parseFloat(finalAmount0) * Math.pow(10, finalDecimals0)
       );
       const amount1Value = Math.floor(
-        parseFloat(amount1) * Math.pow(10, decimals1)
+        parseFloat(finalAmount1) * Math.pow(10, finalDecimals1)
       );
 
       // Check balances
@@ -1058,6 +1089,7 @@ export default function MainCon() {
       </div>
     );
   }
+
   return (
     <>
       {/* Main Content */}
@@ -1098,15 +1130,15 @@ export default function MainCon() {
                     )}...`}</div>
                     <div className="text-cyan-500 font-medium mt-1">
                       {token0.symbol}:{" "}
-                      {(
+                      {Number(
                         Number(reserves.reserve0) /
-                        Math.pow(10, token0.decimals)
+                          Math.pow(10, token0.decimals)
                       ).toFixed(3)}
                       <br />
                       {token1.symbol}:{" "}
-                      {(
+                      {Number(
                         Number(reserves.reserve1) /
-                        Math.pow(10, token1.decimals)
+                          Math.pow(10, token1.decimals)
                       ).toFixed(3)}
                     </div>
                     {priceRate0 && priceRate1 && (
@@ -1145,24 +1177,18 @@ export default function MainCon() {
                   onAmountChange={(value) => {
                     setAmount0(value);
 
-                    // Handle price rate logic for swap
-                    if (value && priceRate0) {
-                      const suggested = (
-                        Number(value) * Number(priceRate0)
+                    if (
+                      value &&
+                      reserves.reserve0 !== "0" &&
+                      reserves.reserve1 !== "0"
+                    ) {
+                      // Calculate suggested amount based on reserve ratios
+                      const suggestedAmount = (
+                        Number(value) *
+                        (Number(reserves.reserve1) / Number(reserves.reserve0))
                       ).toFixed(3);
-                      setAmount1(suggested);
-                    }
-                    // Handle suggested liquidity amount logic
-                    else {
-                      const suggestedAmount = calculateSuggestedLiquidityAmount(
-                        value,
-                        token0,
-                        token1
-                      );
-                      if (suggestedAmount) {
-                        setAmount1(suggestedAmount);
-                        setSuggestedLiquidityAmount(suggestedAmount);
-                      }
+                      setAmount1(suggestedAmount);
+                      setSuggestedLiquidityAmount(suggestedAmount);
                     }
                   }}
                   showInput={pairExists}
