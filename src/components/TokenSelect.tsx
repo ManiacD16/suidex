@@ -1,26 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import SimpleBar from "simplebar-react";
 import "simplebar/dist/simplebar.min.css";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-hot-toast";
 
-interface Token {
-  metadata: any;
-  id: string;
-  name: string;
-  symbol: string;
-  decimals: number;
-  balance: string;
-}
-
-interface TokenSelectorProps {
-  onSelect: (token: Token | null) => void;
+interface TokenSelectProps {
+  onSelect: (tokenId: string) => void;
   label: string;
-  amount: string;
-  onAmountChange: (amount: string) => void;
-  readOnly?: boolean;
-  showInput?: boolean;
 }
 
 interface TokenInfo {
@@ -47,18 +33,13 @@ const TokenSkeleton = () => (
   </div>
 );
 
-export default function TokenSelector({
-  onSelect,
-  amount,
-  onAmountChange,
-  showInput = false,
-}: TokenSelectorProps) {
+export function TokenSelect({ onSelect, label }: TokenSelectProps) {
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [filteredTokens, setFilteredTokens] = useState<TokenInfo[]>([]);
-  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState(""); // Search query state
+  const [searchQuery, setSearchQuery] = useState("");
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -84,10 +65,9 @@ export default function TokenSelector({
 
   const fetchBalance = async (
     tokenId: string,
-    decimals: number,
-    setBalance: (balance: string) => void
-  ) => {
-    if (!tokenId || !currentAccount?.address) return;
+    decimals: number
+  ): Promise<string> => {
+    if (!tokenId || !currentAccount?.address) return "0";
     try {
       const coin = await suiClient.getObject({
         id: tokenId,
@@ -102,14 +82,12 @@ export default function TokenSelector({
         "balance" in coin.data.content.fields
       ) {
         const rawBalance = coin.data.content.fields.balance as string;
-        const formattedBalance = (
-          parseInt(rawBalance, 10) / Math.pow(10, decimals)
-        ).toFixed(2);
-        setBalance(formattedBalance);
+        return (parseInt(rawBalance, 10) / Math.pow(10, decimals)).toFixed(2);
       }
     } catch (error) {
       console.error("Error fetching balance:", error);
     }
+    return "0";
   };
 
   useEffect(() => {
@@ -129,11 +107,11 @@ export default function TokenSelector({
 
         const coinPromises = objects.data
           .filter(
-            (obj) =>
-              obj.data && obj.data.type && obj.data.type.includes("::coin::")
+            (obj): obj is typeof obj & { data: { type: string } } =>
+              obj.data?.type != null && obj.data.type.includes("::coin::")
           )
           .map(async (obj) => {
-            const typeString = obj.data!.type ?? "";
+            const typeString = obj.data.type;
             const [, , coinType] = typeString
               .split("<")[1]
               .split(">")[0]
@@ -144,8 +122,13 @@ export default function TokenSelector({
                 coinType: typeString.split("<")[1].split(">")[0],
               });
 
-              const token: TokenInfo = {
-                id: obj.data!.objectId,
+              const balance = await fetchBalance(
+                obj.data.objectId,
+                metadata?.decimals || 0
+              );
+
+              return {
+                id: obj.data.objectId,
                 type: typeString,
                 metadata: {
                   name: metadata?.name || coinType,
@@ -153,22 +136,11 @@ export default function TokenSelector({
                   image: metadata?.iconUrl || DEFAULT_TOKEN_IMAGE,
                   decimals: metadata?.decimals || 0,
                 },
-                balance: "0",
-              };
-
-              await fetchBalance(
-                obj.data!.objectId,
-                metadata?.decimals || 0,
-                (balance) => {
-                  token.balance = balance;
-                }
-              );
-
-              return token;
+                balance,
+              } satisfies TokenInfo;
             } catch (err) {
-              console.error("Error fetching metadata:", err);
               return {
-                id: obj.data!.objectId,
+                id: obj.data.objectId,
                 type: typeString,
                 metadata: {
                   name: coinType,
@@ -177,12 +149,13 @@ export default function TokenSelector({
                   decimals: 0,
                 },
                 balance: "0",
-              };
+              } satisfies TokenInfo;
             }
           });
 
         const tokenObjects = await Promise.all(coinPromises);
         setTokens(tokenObjects);
+        setFilteredTokens(tokenObjects);
       } catch (error) {
         console.error("Error fetching tokens:", error);
       } finally {
@@ -194,7 +167,6 @@ export default function TokenSelector({
   }, [suiClient, currentAccount]);
 
   useEffect(() => {
-    // Filter tokens based on the search query
     const filtered = tokens.filter((token) => {
       const name = token.metadata?.name?.toLowerCase() || "";
       const symbol = token.metadata?.symbol?.toLowerCase() || "";
@@ -209,20 +181,10 @@ export default function TokenSelector({
       toast.error("No token selected! Please try again.");
       return;
     }
-    const selected: Token = {
-      id: token.id,
-      name: token.metadata?.name || "",
-      symbol: token.metadata?.symbol || "",
-      decimals: token.metadata?.decimals || 0,
-      balance: token.balance,
-      metadata: token.metadata,
-    };
-
-    setSelectedToken(selected);
-    onSelect(selected);
+    setSelectedToken(token);
+    onSelect(token.id);
     setIsOpen(false);
-
-    toast.success(`${selected.name} selected!`);
+    toast.success(`${token.metadata?.name} selected!`);
   };
 
   const handleOpenModal = () => {
@@ -230,35 +192,12 @@ export default function TokenSelector({
       toast.error("Please connect your wallet to select a token.");
       return;
     }
-
     setIsOpen(true);
   };
 
   return (
-    <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20 overflow-x-hidden">
-      <div
-        className={`flex ${
-          !showInput || !selectedToken ? "justify-center" : "justify-between"
-        } items-center gap-2 sm:gap-3`}
-      >
-        {showInput && selectedToken && (
-          <div className="flex-1 min-w-0 relative">
-            <input
-              type="text"
-              value={amount}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (/^\d*\.?\d*$/.test(value) || value === "") {
-                  onAmountChange(value);
-                }
-              }}
-              className="bg-transparent border-none text-lg sm:text-2xl w-full p-2 focus:outline-none text-white transition-all duration-200 focus:scale-105 origin-left"
-              placeholder="0.0"
-            />
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#3a6bc9] to-transparent opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-          </div>
-        )}
-
+    <div className="rounded-3xl px-4 py-6 border-2 border-gray-600 hover:border-[#3a6bc9] transition-all duration-300 hover:shadow-lg hover:shadow-[#3a6bc9]/20">
+      <div className="flex justify-center items-center">
         <button
           onClick={handleOpenModal}
           style={{
@@ -304,16 +243,16 @@ export default function TokenSelector({
       </div>
 
       {isOpen && (
-        <div className="fixed inset-0 mt-20 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
+        <div className="fixed inset-0 bg-black/10 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-1 animate-fadeIn">
           <div
             ref={modalRef}
-            className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[500px] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
+            className="relative -mt-10 bg-[#222f3e] rounded-3xl p-2 sm:p-6 w-full max-w-md border-2 border-[#2b4b8a] max-h-[70vh] flex flex-col animate-slideIn shadow-xl shadow-[#3a6bc9]/20"
             style={{ overflow: "hidden" }}
           >
-            <SimpleBar style={{ maxHeight: "500px" }}>
+            <SimpleBar style={{ maxHeight: "400px" }}>
               <div className="flex justify-between items-center mb-3 sm:mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold text-white">
-                  Select Token
+                  {label}
                 </h3>
                 <button
                   onClick={() => setIsOpen(false)}
@@ -334,6 +273,7 @@ export default function TokenSelector({
                   </svg>
                 </button>
               </div>
+
               <div className="flex items-center justify-center">
                 <input
                   type="text"
@@ -346,6 +286,7 @@ export default function TokenSelector({
                   }}
                 />
               </div>
+
               <div className="mt-3 sm:mt-4 space-y-1 sm:space-y-2 overflow-y-auto flex-1">
                 {isLoading ? (
                   <>

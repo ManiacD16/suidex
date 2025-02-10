@@ -128,8 +128,16 @@ const PoolsInterface: React.FC = () => {
         </div>
 
         {/* Filters Row */}
-        <div className="flex items-stretch gap-[1rem] mb-[1.5rem] w-full">
-          <div style={{ position: "relative", flex: 1, maxWidth: "400px" }}>
+        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-[1rem] mb-[1.5rem] w-full">
+          {/* Search Input */}
+          <div
+            style={{
+              position: "relative",
+              flex: 1,
+              maxWidth: "400px",
+              width: "100%",
+            }}
+          >
             <input
               type="text"
               placeholder="All tokens"
@@ -154,15 +162,27 @@ const PoolsInterface: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex-grow"></div>
+          {/* Spacing */}
+          <div className="flex-grow hidden md:block"></div>
+
+          {/* Buttons */}
           <button
             style={{
               boxShadow: "0px 0px 10px #8b7bef, 0px 0px 10px #8b7bef inset",
             }}
             onClick={() => navigate("/addliquidity")}
-            className="bg-[#8b7bef] text-[#fff] py-[0.5rem] px-[1rem] rounded-xl cursor-pointer"
+            className="bg-[#8b7bef] text-[#fff] py-[0.5rem] px-[1rem] rounded-xl cursor-pointer w-full md:w-auto"
           >
             Add Liquidity
+          </button>
+          <button
+            style={{
+              boxShadow: "0px 0px 10px #ec4040, 0px 0px 10px #ec4040 inset",
+            }}
+            onClick={() => navigate("/removeliquidity")}
+            className="bg-[#ec4040] text-[#fff] py-[0.5rem] px-[1rem] rounded-xl cursor-pointer w-full md:w-auto"
+          >
+            Remove Liquidity
           </button>
         </div>
 
@@ -228,7 +248,7 @@ const PoolsInterface: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-3 text-center text-gray-400">
+                    <td colSpan={9} className="p-3 text-center text-gray-400">
                       No history data found
                     </td>
                   </tr>

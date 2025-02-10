@@ -10,6 +10,7 @@ import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import SwapPage from "./components/Swap";
 import "@mysten/dapp-kit/dist/index.css";
 import Main from "./components/Main";
+import RemoveLiquidity from "./components/RemoveLiquidity";
 
 export default function App() {
   const closeToastManually = () => {
@@ -38,6 +39,7 @@ export default function App() {
           {/* <Route path="/" element={<MainCon />} /> */}
           <Route path="/pool" element={<Pool />} />
           <Route path="/addliquidity" element={<Liquidity />} />
+          <Route path="/removeliquidity" element={<RemoveLiquidity />} />
         </Routes>
       </div>
       <Footer />

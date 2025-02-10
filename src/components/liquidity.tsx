@@ -134,10 +134,12 @@ export default function MainCon() {
     setAmount1("");
     setPriceRate0(null);
     setPriceRate1(null);
+    setSuggestedLiquidityAmount(null);
     setSuggestedAmount1(null);
     setBalance0("0");
     setPairExists(false);
     setCurrentPairId(null);
+
     setReserves({
       reserve0: "0",
       reserve1: "0",
@@ -153,6 +155,7 @@ export default function MainCon() {
     setPriceRate1(null);
     setSuggestedAmount1(null);
     setBalance1("0");
+    setSuggestedLiquidityAmount(null);
     setPairExists(false);
     setCurrentPairId(null);
     setReserves({
