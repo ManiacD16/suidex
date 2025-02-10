@@ -33,9 +33,9 @@ export default function App() {
       <div className="min-h-screen text-white">
         <Routes>
           {/* <Route path="/header" element={<Header />} /> */}
-          <Route path="/main" element={<Main />} />
+          <Route path="/" element={<Main />} />
           <Route path="/swap" element={<SwapPage />} />
-          <Route path="/" element={<SwapPage />} />
+          {/* <Route path="/" element={<SwapPage />} /> */}
           {/* <Route path="/" element={<MainCon />} /> */}
           <Route path="/pool" element={<Pool />} />
           <Route path="/addliquidity" element={<Liquidity />} />
