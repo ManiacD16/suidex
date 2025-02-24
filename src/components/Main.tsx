@@ -110,7 +110,7 @@ export default function Page() {
           </div>
           <div className="order-first md:order-last">
             <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-kh3QPvUUwlhaaWYApOaw5Af11Z0LIJ.png"
+              src="./Suitrump.png"
               alt="SwapX DeFi"
               className="w-full max-w-[500px] mx-auto"
             />
@@ -123,7 +123,7 @@ export default function Page() {
         <div className="container mx-auto grid md:grid-cols-2 gap-8 items-center">
           <div>
             <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-jRDbejBXJjzZj02fkmH7ts4kFGdg6v.png"
+              src="/Suitrump1.png"
               alt="Everyone's Favorite DEX"
               className="w-full max-w-[500px] mx-auto"
             />

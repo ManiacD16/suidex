@@ -227,23 +227,44 @@ export default function MainCon() {
   }, [token0, token1, account?.address, suiClient]);
   useEffect(() => {
     const calculateRates = () => {
-      if (reserves.reserve0 === "0" || reserves.reserve1 === "0") {
+      if (
+        reserves.reserve0 === "0" ||
+        reserves.reserve1 === "0" ||
+        !token0 ||
+        !token1
+      ) {
         setPriceRate0(null);
         setPriceRate1(null);
         return;
       }
+
+      // Convert reserves to their actual values considering decimals
+      const reserve0Actual =
+        Number(reserves.reserve0) / Math.pow(10, token0.decimals);
+      const reserve1Actual =
+        Number(reserves.reserve1) / Math.pow(10, token1.decimals);
+
       // Calculate price rates (1 token0 = X token1 and vice versa)
-      const rate0 = (
-        Number(reserves.reserve1) / Number(reserves.reserve0)
-      ).toFixed(3);
-      const rate1 = (
-        Number(reserves.reserve0) / Number(reserves.reserve1)
-      ).toFixed(3);
+      const rate0 = (reserve1Actual / reserve0Actual).toFixed(6);
+      const rate1 = (reserve0Actual / reserve1Actual).toFixed(6);
+
+      console.log("Price calculations:", {
+        reserve0: reserves.reserve0,
+        reserve1: reserves.reserve1,
+        token0Decimals: token0.decimals,
+        token1Decimals: token1.decimals,
+        reserve0Actual,
+        reserve1Actual,
+        rate0,
+        rate1,
+      });
+
       setPriceRate0(rate0);
       setPriceRate1(rate1);
     };
+
     calculateRates();
-  }, [reserves]);
+  }, [reserves, token0, token1]);
   useEffect(() => {
     const suggestAmount = () => {
       if (amount0 && priceRate0 && reserves.reserve0 !== "0") {
@@ -265,6 +286,7 @@ export default function MainCon() {
       if (!token0 || !token1) return;
       try {
         console.log("Checking pair existence for tokens:", { token0, token1 });
+
         const token0Id = token0.id;
         const token1Id = token1.id;
 
@@ -307,7 +329,7 @@ export default function MainCon() {
                 .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
               const pairId = `0x${hexString}`;
-              console.log("Pair ID:", pairId);
+
               const pairObject = await suiClient.getObject({
                 id: pairId,
                 options: {
@@ -326,20 +348,15 @@ export default function MainCon() {
                 "block_timestamp_last" in pairObject.data.content.fields
               ) {
                 const fields = pairObject.data.content.fields;
-                const isToken0Base = baseType0 < baseType1;
-                console.log("Fields:", fields);
-                // Get the reserves based on the token order
-                const reserve0 = isToken0Base
-                  ? fields.reserve0
-                  : fields.reserve1;
-                const reserve1 = isToken0Base
-                  ? fields.reserve1
-                  : fields.reserve0;
 
-                // Set the reserves without any decimal adjustment (raw values)
+                const isToken0Base = baseType0 < baseType1;
                 setReserves({
-                  reserve0: String(reserve0),
-                  reserve1: String(reserve1),
+                  reserve0: isToken0Base
+                    ? String(fields.reserve0)
+                    : String(fields.reserve1),
+                  reserve1: isToken0Base
+                    ? String(fields.reserve1)
+                    : String(fields.reserve0),
                   timestamp: Number(fields.block_timestamp_last) || 0,
                 });
               }
@@ -460,6 +477,24 @@ export default function MainCon() {
         ],
         typeArguments: [sortedType0, sortedType1],
       });
+      console.log("Simulating Create pair...");
+      const simulationResult = await suiClient.devInspectTransactionBlock({
+        transactionBlock: tx,
+        sender: account.address,
+      });
+
+      console.group("📊 Simulation Results");
+      console.log("Effects:", simulationResult.effects);
+      if (simulationResult.effects?.status?.error) {
+        console.error(
+          "Simulation Error:",
+          simulationResult.effects.status.error
+        );
+        throw new Error(
+          `Simulation Error: ${simulationResult.effects.status.error}`
+        );
+      }
+      console.groupEnd();
 
       // Execute the transaction
       await signAndExecute(
@@ -617,9 +652,11 @@ export default function MainCon() {
             amount1: parsed.amount1,
             liquidity: parsed.liquidity,
             totalSupply: parsed.totalSupply,
+            pairId: currentPairId, // Add the current pair ID
+            transactionHash: event.id.txDigest, // Add the transaction hash
             // timestamp: event.timestampMs,
           };
-          console.log("Processed event:", processed);
+          console.log("Processed event:", processedEvents);
           // Store events in database
           return processed;
         });
@@ -668,18 +705,23 @@ export default function MainCon() {
           amount1: (event.parsedJson as LPEventJson).amount1,
           liquidity: (event.parsedJson as LPEventJson).liquidity,
           totalSupply: (event.parsedJson as LPEventJson).total_supply,
+          pairId: currentPairId, // Add the current pair ID
+          transactionHash: txDigest, // Add the transaction hash
         }));
 
       setEvents(lpEvents || []);
       console.log("Processed LP events:", lpEvents);
       try {
-        const response = await fetch("http://localhost:5000/api/lpcoin", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(lpEvents),
-        });
+        const response = await fetch(
+          "https://dexback-mu.vercel.app/api/lpcoin",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(lpEvents),
+          }
+        );
 
         if (!response.ok) {
           throw new Error("Failed to store LP events");
@@ -839,7 +881,24 @@ export default function MainCon() {
         ],
         typeArguments: [sortedType0, sortedType1],
       });
+      console.log("Simulating LP Adding...");
+      const simulationResult = await suiClient.devInspectTransactionBlock({
+        transactionBlock: addLiquidityTx,
+        sender: account.address,
+      });
 
+      console.group("📊 Simulation Results");
+      console.log("Effects:", simulationResult.effects);
+      if (simulationResult.effects?.status?.error) {
+        console.error(
+          "Simulation Error:",
+          simulationResult.effects.status.error
+        );
+        throw new Error(
+          `Simulation Error: ${simulationResult.effects.status.error}`
+        );
+      }
+      console.groupEnd();
       await signAndExecute(
         { transaction: addLiquidityTx },
         {
@@ -1223,7 +1282,7 @@ export default function MainCon() {
                       Suggested amount based on pool ratio:{" "}
                     </span>
                     <span className="text-cyan-500 font-medium">
-                      {suggestedLiquidityAmount} {token1?.symbol}
+                      {suggestedLiquidityAmount} {token0?.symbol}
                     </span>
                   </div>
                 )}

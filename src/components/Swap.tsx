@@ -555,6 +555,24 @@ const SwapPage = () => {
           swapTx.pure.u64(deadline),
         ],
       });
+      console.log("Simulating Swap...");
+      const simulationResult = await suiClient.devInspectTransactionBlock({
+        transactionBlock: swapTx,
+        sender: account.address,
+      });
+
+      console.group("📊 Simulation Results");
+      console.log("Effects:", simulationResult.effects);
+      if (simulationResult.effects?.status?.error) {
+        console.error(
+          "Simulation Error:",
+          simulationResult.effects.status.error
+        );
+        throw new Error(
+          `Simulation Error: ${simulationResult.effects.status.error}`
+        );
+      }
+      console.groupEnd();
 
       console.log("=== EXECUTING TRANSACTION ===");
 

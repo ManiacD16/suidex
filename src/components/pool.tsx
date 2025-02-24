@@ -21,6 +21,8 @@ interface Pool {
 interface HistoryData {
   sender: string;
   lpCoinId: string;
+  pairId: string;
+  transactionHash: string;
   token0Type: { name: string };
   token1Type: { name: string };
   amount0: string;
@@ -33,7 +35,7 @@ interface HistoryData {
 
 const PoolsInterface: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("all-pools");
+  const [activeTab, setActiveTab] = useState("history");
   const [historyData, setHistoryData] = useState<HistoryData[]>([]);
   const account = useCurrentAccount();
 
@@ -89,7 +91,7 @@ const PoolsInterface: React.FC = () => {
     const fetchHistory = async () => {
       try {
         const response = await fetch(
-          `http://localhost:5000/api/lpcoin/${account.address}`
+          `https://dexback-mu.vercel.app/api/lpcoin/${account.address}`
         );
         if (!response.ok) throw new Error("Failed to fetch history");
 
@@ -113,7 +115,7 @@ const PoolsInterface: React.FC = () => {
           }}
           className="flex justify-center lg:w-1/3 md:w-2/4 mb-[1.5rem] p-[0.25rem] border border-[#8b7bef] rounded-2xl"
         >
-          {["all-pools", "my-positions", "history"].map((tab) => (
+          {["history", "all-pools", "my-positions"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -193,6 +195,8 @@ const PoolsInterface: React.FC = () => {
               <thead>
                 <tr className="text-left text-sm text-[#b794f4]">
                   <th className="p-3">LP Coin ID</th>
+                  <th className="p-3">Pair ID</th>
+                  <th className="p-3">Tx Digest</th>
                   <th className="p-3">Token 0 Type</th>
                   <th className="p-3">Token 1 Type</th>
                   <th className="p-3">Amount 0</th>
@@ -216,6 +220,21 @@ const PoolsInterface: React.FC = () => {
                               0,
                               6
                             )}...${entry.lpCoinId.slice(-4)}`
+                          : "N/A"}
+                      </td>
+                      <td className="p-3">
+                        {entry.pairId
+                          ? `${entry.pairId.slice(0, 6)}...${entry.pairId.slice(
+                              -4
+                            )}`
+                          : "N/A"}
+                      </td>
+                      <td className="p-3">
+                        {entry.transactionHash
+                          ? `${entry.transactionHash.slice(
+                              0,
+                              6
+                            )}...${entry.transactionHash.slice(-4)}`
                           : "N/A"}
                       </td>
                       <td className="p-3">
@@ -248,7 +267,7 @@ const PoolsInterface: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="p-3 text-center text-gray-400">
+                    <td colSpan={11} className="p-3 text-center text-gray-400">
                       No history data found
                     </td>
                   </tr>

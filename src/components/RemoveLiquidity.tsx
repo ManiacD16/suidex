@@ -30,12 +30,28 @@ interface Token {
 //   totalSupply: string;
 // }
 
+interface HistoryData {
+  sender: string;
+  lpCoinId: string;
+  pairId: string;
+  transactionHash: string;
+  token0Type: { name: string };
+  token1Type: { name: string };
+  amount0: string;
+  amount1: string;
+  liquidity: string;
+  totalSupply: string;
+  timestamp: string;
+  type: string;
+}
+
 const formatTokenAmount = (amount: string, decimals: number) => {
   const formattedAmount = Number(amount) / Math.pow(10, decimals);
   return formattedAmount.toFixed(6);
 };
 
 export default function RemoveLiquidity() {
+  const [selectedPercentage, setSelectedPercentage] = useState<number>(100);
   const [token0, setToken0] = useState<Token | null>(null);
   const [token1, setToken1] = useState<Token | null>(null);
   const [lpBalances, setLpBalances] = useState<any[]>([]);
@@ -49,6 +65,12 @@ export default function RemoveLiquidity() {
     reserve1: "0",
     timestamp: 0,
   });
+  const [historyData, setHistoryData] = useState<HistoryData[]>([]);
+  const handlePresetClick = (value: number) => {
+    setSelectedPercentage(value);
+  };
+  //   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  //   const [historyError, setHistoryError] = useState<string | null>(null);
 
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
@@ -102,6 +124,47 @@ export default function RemoveLiquidity() {
       timestamp: 0,
     });
   };
+
+  // In RemoveLiquidity.tsx
+  // In RemoveLiquidity.tsx
+  useEffect(() => {
+    if (!currentPairId) return;
+    // const pairId = currentPairId;
+    const fetchHistory = async () => {
+      try {
+        const response = await fetch(
+          `https://dexback-mu.vercel.app/api/lpcoin/pair/${currentPairId}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch history");
+        }
+
+        const data = await response.json();
+        // If the API returns { data: [...] }, extract the data array
+        setHistoryData(Array.isArray(data) ? data : data.data || []);
+      } catch (error) {
+        console.error("Error fetching history:", error);
+        setHistoryData([]); // Set empty array on error
+      }
+    };
+
+    fetchHistory();
+  }, [currentPairId]);
+
+  const sortTokenTypes = (type0: string, type1: string): boolean => {
+    const bytes0 = new TextEncoder().encode(type0);
+    const bytes1 = new TextEncoder().encode(type1);
+
+    const minLen = Math.min(bytes0.length, bytes1.length);
+    for (let i = 0; i < minLen; i++) {
+      if (bytes0[i] !== bytes1[i]) {
+        return bytes0[i] < bytes1[i];
+      }
+    }
+    return bytes0.length < bytes1.length;
+  };
+
   // Function to find LP tokens
   useEffect(() => {
     const findLPTokens = async () => {
@@ -133,8 +196,18 @@ export default function RemoveLiquidity() {
 
         const lpTokens = objects.data
           .filter((obj) => {
-            if (!obj.data?.type || !obj.data.type.includes("::pair::LPCoin<"))
+            // First check if it's from our package
+            if (
+              !obj.data?.type ||
+              !obj.data.type.includes(CONSTANTS.PACKAGE_ID)
+            ) {
               return false;
+            }
+
+            // Then check if it's an LP token
+            if (!obj.data.type.includes("::pair::LPCoin<")) {
+              return false;
+            }
 
             const typeString = obj.data.type;
             const lpTokenTypes =
@@ -149,6 +222,7 @@ export default function RemoveLiquidity() {
             const normalizedLpType1 = getBaseType(
               lpType1.trim().replace(">", "")
             );
+
             console.log("Comparing Types:", {
               normalizedLpType0,
               normalizedLpType1,
@@ -156,6 +230,7 @@ export default function RemoveLiquidity() {
               token1Type,
             });
 
+            // Match with token types
             return (
               (compareTokenTypes(normalizedLpType0, token0Type) &&
                 compareTokenTypes(normalizedLpType1, token1Type)) ||
@@ -167,7 +242,6 @@ export default function RemoveLiquidity() {
             if (!obj.data?.type || !obj.data?.objectId) return null;
 
             let balance = "0";
-
             if (
               obj.data?.content &&
               typeof obj.data.content === "object" &&
@@ -192,7 +266,7 @@ export default function RemoveLiquidity() {
           .filter(Boolean);
 
         const totalBalance = lpTokens
-          .filter((token) => token !== null) // Remove null values
+          .filter((token) => token !== null)
           .reduce((sum, token) => sum + BigInt(token.balance || 0), 0n);
 
         setLpBalances(lpTokens);
@@ -241,7 +315,10 @@ export default function RemoveLiquidity() {
 
             const pairObject = await suiClient.getObject({
               id: pairId,
-              options: { showContent: true },
+              options: {
+                showContent: true,
+                showType: true,
+              },
             });
 
             if (
@@ -255,10 +332,30 @@ export default function RemoveLiquidity() {
                 reserve1: string;
                 block_timestamp_last: number;
               };
+
+              // Determine token order in the pair
+              // If token0Type is alphabetically first, then reserves match our display order
+              // Otherwise, we need to swap reserve0 and reserve1
+              const isToken0First = sortTokenTypes(token0Type, token1Type);
+
               setReserves({
-                reserve0: fields.reserve0,
-                reserve1: fields.reserve1,
+                reserve0: isToken0First ? fields.reserve0 : fields.reserve1,
+                reserve1: isToken0First ? fields.reserve1 : fields.reserve0,
                 timestamp: Number(fields.block_timestamp_last) || 0,
+              });
+
+              console.log("Pool reserves mapping:", {
+                token0Type,
+                token1Type,
+                isToken0First,
+                pairReserve0: fields.reserve0,
+                pairReserve1: fields.reserve1,
+                displayReserve0: isToken0First
+                  ? fields.reserve0
+                  : fields.reserve1,
+                displayReserve1: isToken0First
+                  ? fields.reserve1
+                  : fields.reserve0,
               });
             }
           }
@@ -279,30 +376,112 @@ export default function RemoveLiquidity() {
     const toastId = toast.loading("Processing transaction...");
 
     try {
-      if (!lpBalances.length || !lpBalances[0]) {
-        toast.error("No LP tokens found");
+      // Filter for LP tokens from our program
+      const latestProgramLP = lpBalances.filter((coin) =>
+        coin.type.includes(CONSTANTS.PACKAGE_ID)
+      );
+
+      if (latestProgramLP.length === 0) {
+        throw new Error("No LP tokens found for this program");
+      }
+
+      // Sort coins by balance (largest first)
+      const sortedCoins = [...latestProgramLP].sort((a, b) => {
+        const balanceA = BigInt(a.balance || "0");
+        const balanceB = BigInt(b.balance || "0");
+        return Number(balanceB - balanceA);
+      });
+
+      // Calculate total available LP
+      const totalAvailableLp = latestProgramLP.reduce(
+        (sum, coin) => sum + BigInt(coin.balance || "0"),
+        0n
+      );
+
+      // Enhanced percentage handling
+      let targetAmount: bigint;
+      if (selectedPercentage === 100) {
+        targetAmount = totalAvailableLp;
+      } else {
+        targetAmount = (totalAvailableLp * BigInt(selectedPercentage)) / 100n;
+      }
+
+      if (targetAmount === 0n || targetAmount > totalAvailableLp) {
+        toast.error("Invalid amount to remove");
         return;
       }
 
-      const lpCoin = lpBalances[0];
-      const lpAmount = BigInt(lpCoin?.balance || "0");
+      const tx = new Transaction();
+      const biggestCoin = sortedCoins[0];
+      const biggestCoinBalance = BigInt(biggestCoin.balance || "0");
 
+      console.log("Initial LP Details:", {
+        totalAvailable: totalAvailableLp.toString(),
+        targetAmount: targetAmount.toString(),
+        selectedPercentage,
+        biggestCoinBalance: biggestCoinBalance.toString(),
+      });
+
+      let coinToUse;
+      let burnAmount;
+
+      // Simplified coin handling strategy
+      if (biggestCoinBalance >= targetAmount) {
+        console.log("Using single coin strategy");
+        const primaryCoinObject = tx.object(biggestCoin.id);
+
+        if (selectedPercentage === 100) {
+          coinToUse = primaryCoinObject;
+        } else {
+          coinToUse = tx.splitCoins(primaryCoinObject, [
+            tx.pure.u64(targetAmount.toString()),
+          ]);
+        }
+        burnAmount = targetAmount;
+      } else {
+        console.log("Using merge strategy");
+        let remainingTarget = targetAmount;
+        const coinsNeeded = [];
+
+        for (const coin of sortedCoins) {
+          if (remainingTarget <= 0n) break;
+          const coinBalance = BigInt(coin.balance || "0");
+          coinsNeeded.push(coin.id);
+          remainingTarget -= coinBalance;
+        }
+
+        if (remainingTarget > 0n) {
+          throw new Error("Not enough LP tokens to reach target amount");
+        }
+
+        const primaryCoin = tx.object(coinsNeeded[0]);
+        if (coinsNeeded.length > 1) {
+          const otherCoins = coinsNeeded.slice(1).map((id) => tx.object(id));
+          tx.mergeCoins(primaryCoin, otherCoins);
+        }
+        coinToUse = primaryCoin;
+        burnAmount = targetAmount;
+      }
+
+      const vectorArg = tx.makeMoveVec({
+        elements: [coinToUse],
+      });
+
+      if (!currentPairId) {
+        throw new Error("No valid liquidity pair found.");
+      }
+
+      // Get LP token types first - we'll use this to get the correct order
       const response = await suiClient.getObject({
-        id: lpCoin.id,
+        id: biggestCoin.id,
         options: { showType: true },
       });
 
-      if (!response?.data || !("type" in response.data)) {
-        throw new Error("Invalid LP token type: Missing data.type");
-      }
-
-      const type = response.data.type;
-
-      if (!type) {
+      if (!response?.data?.type) {
         throw new Error("Failed to retrieve LP token type.");
       }
 
-      const lpTokenTypes = type.match(/LPCoin<(.+),\s*(.+)>/);
+      const lpTokenTypes = response.data.type.match(/LPCoin<(.+),\s*(.+)>/);
       if (!lpTokenTypes) {
         throw new Error("Invalid LP token format.");
       }
@@ -311,25 +490,25 @@ export default function RemoveLiquidity() {
       type0 = getBaseType(type0.trim());
       type1 = getBaseType(type1.trim().replace(">", ""));
 
-      const reserve0 = BigInt(reserves?.reserve0 || "0");
-      const reserve1 = BigInt(reserves?.reserve1 || "0");
+      // Set minimum amount to zero to avoid ERR_INSUFFICIENT_B_AMOUNT (303)
+      // This is safe because the actual amounts are calculated by the contract
+      const minAmount0 = "0";
+      const minAmount1 = "0";
 
-      const amount0Expected =
-        (lpAmount * reserve0) / BigInt(selectedLpBalance || "1");
-      const amount1Expected =
-        (lpAmount * reserve1) / BigInt(selectedLpBalance || "1");
+      // Set deadline in milliseconds (not seconds)
+      const currentTimestamp = Date.now();
+      const deadline = currentTimestamp + 10 * 60 * 1000; // 10 minutes in milliseconds
 
-      const minAmount0 = (amount0Expected * 95n) / 100n;
-      const minAmount1 = (amount1Expected * 95n) / 100n;
+      console.log("Transaction params:", {
+        currentTimestampMs: currentTimestamp,
+        deadlineMs: deadline,
+        burnAmount: burnAmount.toString(),
+        minAmount0,
+        minAmount1,
+        type0,
+        type1,
+      });
 
-      const currentTimestamp = Math.floor(Date.now());
-      const deadline = currentTimestamp + 1200000; // 20 minutes
-
-      if (!currentPairId) {
-        throw new Error("No valid liquidity pair found.");
-      }
-
-      const tx = new Transaction();
       tx.moveCall({
         target: `${CONSTANTS.PACKAGE_ID}::${CONSTANTS.MODULES.ROUTER}::remove_liquidity`,
         typeArguments: [type0, type1],
@@ -337,12 +516,28 @@ export default function RemoveLiquidity() {
           tx.object(CONSTANTS.ROUTER_ID),
           tx.object(CONSTANTS.FACTORY_ID),
           tx.object(currentPairId),
-          tx.object(lpCoin.id),
-          tx.pure.u256(minAmount0.toString()),
-          tx.pure.u256(minAmount1.toString()),
+          vectorArg,
+          tx.pure.u256(burnAmount.toString()),
+          tx.pure.u256(minAmount0),
+          tx.pure.u256(minAmount1),
           tx.pure.u64(deadline),
         ],
       });
+
+      console.log("Simulating LP removal...");
+      const simulationResult = await suiClient.devInspectTransactionBlock({
+        transactionBlock: tx,
+        sender: account.address,
+      });
+
+      console.group("📊 Simulation Results");
+      console.log("Effects:", simulationResult.effects);
+      if (simulationResult.effects?.status?.error) {
+        throw new Error(
+          `Simulation Error: ${simulationResult.effects.status.error}`
+        );
+      }
+      console.groupEnd();
 
       await signAndExecute(
         { transaction: tx },
@@ -405,53 +600,178 @@ export default function RemoveLiquidity() {
 
             {pairExists && currentPairId && (
               <div className="p-4 rounded-xl mb-4 bg-green-500/5 border border-green-500/20">
-                <div className="text-sm text-gray-300">
-                  {`Pair ID: ${currentPairId.slice(0, 8)}...`}
+                {/* Desktop/Large Screen Layout */}
+                <div className="hidden md:block">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span>
+                      <div>
+                        <p className="text-sm text-gray-300">
+                          Trading Pair Active
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          ID: {currentPairId.slice(0, 8)}...
+                          {currentPairId.slice(-6)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 mb-1">
+                        Pool Reserves
+                      </p>
+                      <p className="text-sm">
+                        {token0
+                          ? (
+                              Number(reserves.reserve0) /
+                              Math.pow(10, token0.decimals)
+                            ).toFixed(3)
+                          : "0"}{" "}
+                        /{" "}
+                        {token1
+                          ? (
+                              Number(reserves.reserve1) /
+                              Math.pow(10, token1.decimals)
+                            ).toFixed(3)
+                          : "0"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-cyan-500 font-medium mt-3 text-center">
+                    LP Balance: {formatTokenAmount(selectedLpBalance, 9)}
+                  </div>
                 </div>
-                <div className="text-cyan-500 font-medium mt-1">
-                  LP Balance: {formatTokenAmount(selectedLpBalance, 9)}
-                </div>
-                <div className="mt-2 text-sm text-gray-400">
-                  Pool Reserves:
-                  <div>{`${token0?.symbol}: ${formatTokenAmount(
-                    reserves.reserve0,
-                    token0?.decimals || 9
-                  )}`}</div>
-                  <div>{`${token1?.symbol}: ${formatTokenAmount(
-                    reserves.reserve1,
-                    token1?.decimals || 9
-                  )}`}</div>
+
+                {/* Mobile/Small Screen Layout */}
+                <div className="md:hidden">
+                  <div className="text-sm text-gray-300">
+                    ID: {currentPairId.slice(0, 8)}...{currentPairId.slice(-6)}
+                  </div>
+                  <div className="text-cyan-500 font-medium mt-1">
+                    LP Balance: {formatTokenAmount(selectedLpBalance, 9)}
+                  </div>
+                  <div className="mt-2 text-sm text-gray-400">
+                    Pool Reserves:
+                    <div>{`${token0?.symbol}: ${
+                      token0
+                        ? (
+                            Number(reserves.reserve0) /
+                            Math.pow(10, token0.decimals)
+                          ).toFixed(3)
+                        : "0"
+                    }`}</div>
+                    <div>{`${token1?.symbol}: ${
+                      token1
+                        ? (
+                            Number(reserves.reserve1) /
+                            Math.pow(10, token1.decimals)
+                          ).toFixed(3)
+                        : "0"
+                    }`}</div>
+                  </div>
                 </div>
               </div>
             )}
 
             <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-xs sm:text-sm text-gray-400">
-                  First Token
-                </label>
-                <TokenSelector
-                  label="Token 0"
-                  onSelect={handleToken0Change}
-                  amount=""
-                  onAmountChange={() => {}}
-                  showInput={false}
-                />
-              </div>
+              <div className="flex flex-1 lg:flex-row space-x-2 flex-col justify-between">
+                <div className="space-y-2">
+                  <label className="text-xs sm:text-sm text-gray-400">
+                    First Token
+                  </label>
+                  <TokenSelector
+                    label="Token 0"
+                    onSelect={handleToken0Change}
+                    amount=""
+                    onAmountChange={() => {}}
+                    showInput={false}
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-xs sm:text-sm text-gray-400">
-                  Second Token
-                </label>
-                <TokenSelector
-                  label="Token 1"
-                  onSelect={handleToken1Change}
-                  amount=""
-                  onAmountChange={() => {}}
-                  showInput={false}
-                />
+                <div className="space-y-2">
+                  <label className="text-xs sm:text-sm text-gray-400">
+                    Second Token
+                  </label>
+                  <TokenSelector
+                    label="Token 1"
+                    onSelect={handleToken1Change}
+                    amount=""
+                    onAmountChange={() => {}}
+                    showInput={false}
+                  />
+                </div>
               </div>
+              <div className="bg-zinc-900/40 p-8 rounded-3xl max-w-md mx-auto">
+                <div className="mb-8">
+                  <span className="text-white text-6xl font-bold">
+                    {selectedPercentage}%
+                  </span>
+                </div>
 
+                <div className="relative mb-8 ">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={selectedPercentage}
+                    onChange={(e) =>
+                      setSelectedPercentage(Number(e.target.value))
+                    }
+                    className="w-full appearance-none bg-transparent cursor-pointer 
+      [&::-webkit-slider-runnable-track]:rounded-full 
+      [&::-webkit-slider-runnable-track]:h-2 
+      [&::-webkit-slider-thumb]:appearance-none 
+      [&::-webkit-slider-thumb]:-mt-2.5 
+      [&::-webkit-slider-thumb]:h-6 
+      [&::-webkit-slider-thumb]:w-6 
+      [&::-webkit-slider-thumb]:rounded-full 
+      [&::-webkit-slider-thumb]:bg-[url('/Trump.png')] 
+      [&::-webkit-slider-thumb]:bg-[length:24px] 
+      [&::-webkit-slider-thumb]:bg-no-repeat 
+      [&::-webkit-slider-thumb]:bg-center"
+                    style={{
+                      background: ` linear-gradient(to right, rgb(39, 39, 42) 0%, rgb(39, 39, 42) ${selectedPercentage}%, rgb(255, 255, 255) ${selectedPercentage}%, rgb(255, 255, 255) 100%)`,
+                      borderRadius: "9999px",
+                    }}
+                  />
+                </div>
+
+                <div className=" flex items-center justify-center mb-4">
+                  <div className="relative lg:w-1/4 md:w-1/3 w-1/2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={selectedPercentage || ""}
+                      onChange={(e) => {
+                        const value =
+                          e.target.value === "" ? 1 : Number(e.target.value);
+                        if (value >= 1 && value <= 100) {
+                          setSelectedPercentage(value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-[#2c2d3a] text-white rounded-lg border border-gray-700 focus:outline-none focus:border-purple-500"
+                    />
+
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between gap-4">
+                  {[25, 50, 75, 100].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => handlePresetClick(value)}
+                      className="bg-zinc-800/50 text-teal-300 hover:bg-zinc-800 hover:text-teal-200 rounded-full px-4 py-2 flex-1"
+                    >
+                      {value === 100 ? "Max" : `${value}%`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* <div className="text-center text-gray-300 mb-4">
+                Selected Percentage: {selectedPercentage}%
+              </div> */}
               <button
                 onClick={handleRemoveLiquidity}
                 disabled={isLoading || !pairExists}
@@ -504,128 +824,76 @@ export default function RemoveLiquidity() {
           </div>
         </div>
       </main>
-
-      {/* Events Display */}
-      {/* <div className="mt-8 max-w-full mx-auto px-4">
-        <div className="bg-[#222f3e] bg-opacity-10 backdrop-blur-sm rounded-3xl border border-gray-800 shadow-lg p-4">
-          <h2 className="text-lg text-gray-300 font-semibold mb-4">
-            Recent Remove LP Events
+      {/* Transaction History Table */}
+      {currentPairId && (
+        <div className="mt-6 p-4 ml-4 mr-4 bg-[#1f2028] rounded-2xl border border-[#8b7bef]/50 shadow-md">
+          <h2 className="text-lg font-semibold text-white mb-3">
+            Transaction History
           </h2>
-          {events.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-gray-800">
-              <table className="min-w-full divide-y divide-gray-800">
-                <thead className="bg-gray-900">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Amount 0
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Amount 1
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Liquidity
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      LP Token ID
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Sender
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Token0 Type
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Token1 Type
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-400"
-                    >
-                      Total Supply
-                    </th>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-white">
+              <thead>
+                <tr className="text-left text-sm text-[#b794f4]">
+                  <th className="p-3">LP Coin ID</th>
+                  <th className="p-3">Pair ID</th>
+                  <th className="p-3">Tx Digest</th>
+                  <th className="p-3">Token 0</th>
+                  <th className="p-3">Token 1</th>
+                  <th className="p-3">Amount 0</th>
+                  <th className="p-3">Amount 1</th>
+                  <th className="p-3">Total Supply</th>
+                  <th className="p-3">Liquidity</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">Sender</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyData.map((entry, index) => (
+                  <tr
+                    key={index}
+                    className="border-t border-[#4a5568] hover:bg-[#2c2d3a]/50 transition"
+                  >
+                    <td className="p-3">
+                      {entry.lpCoinId.slice(0, 6)}...
+                      {entry.lpCoinId.slice(-4)}
+                    </td>
+                    <td className="p-3">
+                      {entry.pairId.slice(0, 6)}...
+                      {entry.pairId.slice(-4)}
+                    </td>
+                    <td className="p-3">
+                      {entry.transactionHash.slice(0, 6)}...
+                      {entry.transactionHash.slice(-4)}
+                    </td>
+                    <td className="p-3">
+                      {entry.token0Type.name.split("::").pop()}
+                    </td>
+                    <td className="p-3">
+                      {entry.token1Type.name.split("::").pop()}
+                    </td>
+                    <td className="p-3">
+                      {Number(entry.amount0).toLocaleString()}
+                    </td>
+                    <td className="p-3">
+                      {Number(entry.amount1).toLocaleString()}
+                    </td>
+                    <td className="p-3">
+                      {Number(entry.totalSupply).toLocaleString()}
+                    </td>
+                    <td className="p-3">
+                      {Number(entry.liquidity).toLocaleString()}
+                    </td>
+                    <td className="p-3">{entry.type.split("::").pop()}</td>
+                    <td className="p-3">
+                      {entry.sender.slice(0, 6)}...{entry.sender.slice(-4)}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800 bg-gray-900/50">
-                  {events.map((event, idx) => (
-                    <tr key={idx} className="hover:bg-gray-800/50">
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.amount0
-                          ? Number(event.amount0).toLocaleString()
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.amount1
-                          ? Number(event.amount1).toLocaleString()
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.liquidity
-                          ? Number(event.liquidity).toLocaleString()
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-cyan-500 whitespace-nowrap">
-                        {event.lpCoinId
-                          ? `${event.lpCoinId.slice(
-                              0,
-                              6
-                            )}...${event.lpCoinId.slice(-4)}`
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.sender
-                          ? `${event.sender.slice(0, 6)}...${event.sender.slice(
-                              -4
-                            )}`
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.token0Type?.name
-                          ? event.token0Type.name.split("::").pop()
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.token1Type?.name
-                          ? event.token1Type.name.split("::").pop()
-                          : "N/A"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-300 whitespace-nowrap">
-                        {event.totalSupply
-                          ? Number(event.totalSupply).toLocaleString()
-                          : "N/A"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center text-gray-400 py-4">
-              No remove LP events found
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div> */}
+      )}
     </>
   );
 }
