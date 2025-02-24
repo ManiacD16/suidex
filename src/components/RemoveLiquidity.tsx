@@ -166,124 +166,124 @@ export default function RemoveLiquidity() {
   };
 
   // Function to find LP tokens
-  useEffect(() => {
-    const findLPTokens = async () => {
-      if (!token0 || !token1 || !account?.address) return;
-      setIsLoading(true);
-      console.log("\n--- Starting LP Token Search ---");
 
-      try {
-        const [token0Obj, token1Obj] = await Promise.all([
-          suiClient.getObject({ id: token0.id, options: { showType: true } }),
-          suiClient.getObject({ id: token1.id, options: { showType: true } }),
-        ]);
+  const findLPTokens = async () => {
+    if (!token0 || !token1 || !account?.address) return;
+    setIsLoading(true);
+    console.log("\n--- Starting LP Token Search ---");
 
-        const token0Type = token0Obj.data?.type
-          ? getBaseType(token0Obj.data.type)
-          : "";
-        const token1Type = token1Obj.data?.type
-          ? getBaseType(token1Obj.data.type)
-          : "";
+    try {
+      const [token0Obj, token1Obj] = await Promise.all([
+        suiClient.getObject({ id: token0.id, options: { showType: true } }),
+        suiClient.getObject({ id: token1.id, options: { showType: true } }),
+      ]);
 
-        const objects = await suiClient.getOwnedObjects({
-          owner: account.address,
-          options: {
-            showType: true,
-            showContent: true,
-            showDisplay: true,
-          },
-        });
+      const token0Type = token0Obj.data?.type
+        ? getBaseType(token0Obj.data.type)
+        : "";
+      const token1Type = token1Obj.data?.type
+        ? getBaseType(token1Obj.data.type)
+        : "";
 
-        const lpTokens = objects.data
-          .filter((obj) => {
-            // First check if it's from our package
-            if (
-              !obj.data?.type ||
-              !obj.data.type.includes(CONSTANTS.PACKAGE_ID)
-            ) {
-              return false;
-            }
+      const objects = await suiClient.getOwnedObjects({
+        owner: account.address,
+        options: {
+          showType: true,
+          showContent: true,
+          showDisplay: true,
+        },
+      });
 
-            // Then check if it's an LP token
-            if (!obj.data.type.includes("::pair::LPCoin<")) {
-              return false;
-            }
+      const lpTokens = objects.data
+        .filter((obj) => {
+          // First check if it's from our package
+          if (
+            !obj.data?.type ||
+            !obj.data.type.includes(CONSTANTS.PACKAGE_ID)
+          ) {
+            return false;
+          }
 
-            const typeString = obj.data.type;
-            const lpTokenTypes =
-              typeString?.match(/LPCoin<(.+),\s*(.+)>/) || [];
-            if (!lpTokenTypes) {
-              console.log("No LP token types found in string");
-              return false;
-            }
+          // Then check if it's an LP token
+          if (!obj.data.type.includes("::pair::LPCoin<")) {
+            return false;
+          }
 
-            const [, lpType0, lpType1] = lpTokenTypes;
-            const normalizedLpType0 = getBaseType(lpType0.trim());
-            const normalizedLpType1 = getBaseType(
-              lpType1.trim().replace(">", "")
-            );
+          const typeString = obj.data.type;
+          const lpTokenTypes = typeString?.match(/LPCoin<(.+),\s*(.+)>/) || [];
+          if (!lpTokenTypes) {
+            console.log("No LP token types found in string");
+            return false;
+          }
 
-            console.log("Comparing Types:", {
-              normalizedLpType0,
-              normalizedLpType1,
-              token0Type,
-              token1Type,
-            });
+          const [, lpType0, lpType1] = lpTokenTypes;
+          const normalizedLpType0 = getBaseType(lpType0.trim());
+          const normalizedLpType1 = getBaseType(
+            lpType1.trim().replace(">", "")
+          );
 
-            // Match with token types
-            return (
-              (compareTokenTypes(normalizedLpType0, token0Type) &&
-                compareTokenTypes(normalizedLpType1, token1Type)) ||
-              (compareTokenTypes(normalizedLpType0, token1Type) &&
-                compareTokenTypes(normalizedLpType1, token0Type))
-            );
-          })
-          .map((obj) => {
-            if (!obj.data?.type || !obj.data?.objectId) return null;
+          console.log("Comparing Types:", {
+            normalizedLpType0,
+            normalizedLpType1,
+            token0Type,
+            token1Type,
+          });
 
-            let balance = "0";
-            if (
-              obj.data?.content &&
-              typeof obj.data.content === "object" &&
-              "fields" in obj.data.content &&
-              obj.data.content.fields &&
-              typeof obj.data.content.fields === "object" &&
-              "balance" in obj.data.content.fields
-            ) {
-              balance = obj.data.content.fields.balance as string;
-            }
+          // Match with token types
+          return (
+            (compareTokenTypes(normalizedLpType0, token0Type) &&
+              compareTokenTypes(normalizedLpType1, token1Type)) ||
+            (compareTokenTypes(normalizedLpType0, token1Type) &&
+              compareTokenTypes(normalizedLpType1, token0Type))
+          );
+        })
+        .map((obj) => {
+          if (!obj.data?.type || !obj.data?.objectId) return null;
 
-            return {
-              id: obj.data.objectId,
-              type: obj.data.type,
-              metadata: {
-                name: "LPCoin",
-                symbol: "LP",
-              },
-              balance,
-            };
-          })
-          .filter(Boolean);
+          let balance = "0";
+          if (
+            obj.data?.content &&
+            typeof obj.data.content === "object" &&
+            "fields" in obj.data.content &&
+            obj.data.content.fields &&
+            typeof obj.data.content.fields === "object" &&
+            "balance" in obj.data.content.fields
+          ) {
+            balance = obj.data.content.fields.balance as string;
+          }
 
-        const totalBalance = lpTokens
-          .filter((token) => token !== null)
-          .reduce((sum, token) => sum + BigInt(token.balance || 0), 0n);
+          return {
+            id: obj.data.objectId,
+            type: obj.data.type,
+            metadata: {
+              name: "LPCoin",
+              symbol: "LP",
+            },
+            balance,
+          };
+        })
+        .filter(Boolean);
 
-        setLpBalances(lpTokens);
-        setSelectedLpBalance(totalBalance.toString());
-        setPairExists(lpTokens.length > 0);
+      const totalBalance = lpTokens
+        .filter((token) => token !== null)
+        .reduce((sum, token) => sum + BigInt(token.balance || 0), 0n);
 
-        if (lpTokens.length > 0) {
-          await fetchPairData(token0Type, token1Type);
-        }
-      } catch (error) {
-        console.error("Error finding LP tokens:", error);
-        toast.error("Error loading LP tokens");
-      } finally {
-        setIsLoading(false);
+      setLpBalances(lpTokens);
+      setSelectedLpBalance(totalBalance.toString());
+      setPairExists(lpTokens.length > 0);
+
+      if (lpTokens.length > 0) {
+        await fetchPairData(token0Type, token1Type);
       }
-    };
+    } catch (error) {
+      console.error("Error finding LP tokens:", error);
+      toast.error("Error loading LP tokens");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     findLPTokens();
   }, [token0, token1, account?.address, suiClient]);
 
@@ -542,7 +542,7 @@ export default function RemoveLiquidity() {
       await signAndExecute(
         { transaction: tx },
         {
-          onSuccess: (result) => {
+          onSuccess: async (result) => {
             console.log("Success:", result);
             toast.update(toastId, {
               render: "LP removed successfully!",
@@ -550,7 +550,10 @@ export default function RemoveLiquidity() {
               isLoading: false,
               autoClose: 5000,
             });
-            resetState();
+
+            await findLPTokens();
+
+            // resetState();
           },
           onError: (error) => {
             console.error("Error:", error);
