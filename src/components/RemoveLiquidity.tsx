@@ -704,8 +704,8 @@ export default function RemoveLiquidity() {
                 </div>
               </div>
               <div className="bg-zinc-900/40 p-8 rounded-3xl max-w-md mx-auto">
-                <div className="mb-8">
-                  <span className="text-white text-6xl font-bold">
+                <div className="mb-4 sm:mb-8">
+                  <span className="text-white text-4xl sm:text-6xl font-bold">
                     {selectedPercentage}%
                   </span>
                 </div>
@@ -760,12 +760,12 @@ export default function RemoveLiquidity() {
                     </span>
                   </div>
                 </div>
-                <div className="flex justify-between gap-4">
+                <div className="flex flex-wrap justify-between gap-2 md:gap-4 md:flex">
                   {[25, 50, 75, 100].map((value) => (
                     <button
                       key={value}
                       onClick={() => handlePresetClick(value)}
-                      className="bg-zinc-800/50 text-teal-300 hover:bg-zinc-800 hover:text-teal-200 rounded-full px-4 py-2 flex-1"
+                      className="bg-zinc-800/50 text-teal-300 hover:bg-zinc-800 hover:text-teal-200 rounded-full px-4 py-2 flex-1 text-sm md:text-base"
                     >
                       {value === 100 ? "Max" : `${value}%`}
                     </button>
