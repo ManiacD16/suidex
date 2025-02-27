@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { FaTelegramPlane, FaMediumM } from "react-icons/fa"; //FaFacebookF
 import { FaXTwitter } from "react-icons/fa6"; //FaInstagram
+import Trump from "../assets/videos/Trump_1_0001-0100_1.webm";
 
 const SocialIcon: React.FC<{
   Icon: React.ElementType;
@@ -109,11 +110,16 @@ export default function Page() {
             </button>
           </div>
           <div className="order-first md:order-last">
-            <img
-              src="./Suitrump.png"
-              alt="SwapX DeFi"
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
               className="w-full max-w-[500px] mx-auto"
-            />
+            >
+              <source src={Trump} type="video/webm" />
+              Your browser does not support the video tag.
+            </video>
           </div>
         </div>
       </section>

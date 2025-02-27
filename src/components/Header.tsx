@@ -557,7 +557,7 @@ export default function Header() {
             </button>
 
             {dropdownVisible && (
-              <div className="absolute right-0 mt-2 w-[200px] bg-gray-800/95 border border-[#2a4b8a] rounded-lg px-2 shadow-lg z-50">
+              <div className="absolute right-0 mt-2  border border-[#2a4b8a] rounded-2xl shadow-lg z-50">
                 <ConnectButton
                   className="sui-connect-button !text-black hover:!bg-[#16a34a] rounded-xl transition-all duration-300"
                   style={{
